@@ -14,7 +14,15 @@ import (
 // cluster's name. Tests replace it with a fake.
 type connectFunc func(kubeContext string) (collect.Clients, string, error)
 
-func newRootCmd(version string, connect connectFunc) *cobra.Command {
+// buildInfo holds the values set at build time.
+type buildInfo struct {
+	Version string
+	// CTAURL is the "Book a call" link in the HTML report. Empty hides the
+	// button.
+	CTAURL string
+}
+
+func newRootCmd(build buildInfo, connect connectFunc) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "shipready",
 		Short: "Find production-readiness problems in your Kubernetes cluster",
@@ -23,7 +31,7 @@ func newRootCmd(version string, connect connectFunc) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newScanCmd(version, connect), newChecksCmd(), newVersionCmd(version))
+	root.AddCommand(newScanCmd(build, connect), newChecksCmd(), newVersionCmd(build.Version))
 	return root
 }
 

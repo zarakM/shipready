@@ -12,8 +12,15 @@ import (
 	"github.com/zarakM/shipready/internal/collect"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+// Set at build time with -ldflags, for example:
+//
+//	go build -ldflags "-X main.version=1.0.0 -X main.CTAURL=https://example.com/book" ./cmd/shipready
+var (
+	version = "dev"
+	// CTAURL is the booking link behind the report's "Book a call" button.
+	// It stays empty, and the button hidden, until the link exists.
+	CTAURL = ""
+)
 
 // Exit codes. A scan that completes exits 0 whatever it found, unless
 // --fail-on asks otherwise.
@@ -34,7 +41,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	err := newRootCmd(version, collect.Connect).ExecuteContext(ctx)
+	err := newRootCmd(buildInfo{Version: version, CTAURL: CTAURL}, collect.Connect).ExecuteContext(ctx)
 	if err == nil {
 		return
 	}

@@ -38,7 +38,13 @@ shipready version
 
 Exit code is 0 when the scan completes, regardless of findings. Add `--fail-on critical|high` for CI use: the report and summary are still written, and the exit code is 2 when any check of that severity or above failed. Exit code 1 means the scan itself could not run.
 
-**Until milestone 3 ships the HTML renderer:** `--format` defaults to `json`, `--output` defaults to `./shipready-report.json`, and `--format html` returns a clear "not available yet" error. Both defaults flip to the values above in milestone 3. `--aws` is not registered until milestone 4.
+`--aws` is not registered until milestone 4.
+
+Output rules (decided in milestone 3):
+
+- With one format, the report is written to `--output` exactly as given. With `--format html,json`, each format gets `--output`'s name with its own extension, so the default writes `shipready-report.html` and `shipready-report.json` side by side.
+- `--output something.json` with no `--format` means JSON. An explicit `--format` always wins.
+- **Never half a report.** A check that fails, or a resource type that cannot be read, never stops the scan: every check is still run and reported. All formats are rendered in memory before any file is written, each file is moved into place in one step, and if one format cannot be written the others are removed. `--fail-on` changes only the exit code; the complete report and summary are written first.
 
 `--skip` accepts check IDs and category names, case-insensitive. A check skipped this way still appears in the report as skipped, with the reason.
 
@@ -170,6 +176,16 @@ One self-contained HTML file, dark technical look to match the Opscify site.
 6. **Call to action:** "Want this fixed in a week? Book a call." Link comes from a build-time variable `CTAURL` (placeholder until the Opscify booking link exists).
 
 The JSON output carries the same data in a stable schema so a paid tier can consume it later.
+
+Decided in milestone 3:
+
+- **Look:** a neutral dark theme, since the Opscify brand assets are not in the repo yet. Every colour is a variable at the top of `internal/report/assets/report.css`, so matching the site later is a change in one place. Fonts are the reader's system fonts; nothing is downloaded.
+- **Self-contained and offline:** CSS and JS are embedded in the binary and inlined. The file carries a Content-Security-Policy that blocks every external request, so the browser enforces that nothing leaves the machine. The only outbound link is the call to action.
+- **Works without scripts:** findings collapse with native `<details>`. The inline script only adds a severity filter, expand and collapse all, copy buttons on snippets, opening a finding when its link is followed, and expanding everything for print.
+- **Findings:** ordered by severity within each category. Every affected resource is listed, in a scrolling table. Passed checks are listed per category in a collapsed block.
+- **Print:** a light print stylesheet, so the report can be saved as PDF and forwarded.
+- **Call to action:** the text is always shown and does not mention the price. The "Book a call" button appears only when `CTAURL` is set at build time to an http(s) link (`-ldflags "-X main.CTAURL=..."`), so a report never carries a dead link.
+- **Sample:** `docs/sample-report.html` is rendered from `testdata/sample/cluster.yaml`, a fixture built to give a believable mixed result. A test fails when the committed file is out of date; `go test ./internal/report -run TestSampleReportIsCurrent -update` regenerates it. Its button points at a placeholder link until the booking URL exists.
 
 ## 9. Architecture
 

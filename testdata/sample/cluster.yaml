@@ -1,0 +1,308 @@
+# A believable Series A cluster with a mix of good and bad practice. It is the
+# source of docs/sample-report.html. Clock fixed at 2026-11-16T12:00:00Z.
+#
+# Expected: Reliability 60, Security 49, Cost 57, Recovery 75, overall 60 (C).
+apiVersion: v1
+kind: Node
+metadata:
+  name: ip-10-0-1-21.ec2.internal
+  labels: {topology.kubernetes.io/zone: us-east-1a}
+status:
+  allocatable: {cpu: "2", memory: 8Gi}
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: ip-10-0-2-47.ec2.internal
+  labels: {topology.kubernetes.io/zone: us-east-1b}
+status:
+  allocatable: {cpu: "2", memory: 8Gi}
+---
+# Nothing is scheduled here: COST-002.
+apiVersion: v1
+kind: Node
+metadata:
+  name: ip-10-0-2-90.ec2.internal
+  labels: {topology.kubernetes.io/zone: us-east-1b}
+status:
+  allocatable: {cpu: "2", memory: 8Gi}
+---
+# The well-run service: replicas, budget, autoscaler, probes, limits.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: prod}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      serviceAccountName: api
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: api
+          image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/api:2.14.1
+          resources:
+            requests: {cpu: "1", memory: 3Gi}
+            limits: {memory: 4Gi}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /livez, port: 8080}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: api, namespace: prod}
+spec:
+  maxUnavailable: 1
+  selector: {matchLabels: {app: api}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: api, namespace: prod}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
+  minReplicas: 3
+  maxReplicas: 12
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-6d8f7c9b5-x2k4p
+  namespace: prod
+  labels: {app: api}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-6d8f7c9b5, uid: 00000000-0000-0000-0000-0000000000a1}
+spec:
+  nodeName: ip-10-0-1-21.ec2.internal
+  containers:
+    - name: api
+      image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/api:2.14.1
+      resources:
+        requests: {cpu: "1", memory: 3Gi}
+status: {phase: Running, startTime: "2026-11-14T09:00:00Z"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-6d8f7c9b5-m7q9z
+  namespace: prod
+  labels: {app: api}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-6d8f7c9b5, uid: 00000000-0000-0000-0000-0000000000a1}
+spec:
+  nodeName: ip-10-0-2-47.ec2.internal
+  containers:
+    - name: api
+      image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/api:2.14.1
+      resources:
+        requests: {cpu: "1", memory: 3Gi}
+status: {phase: Running, startTime: "2026-11-14T09:00:00Z"}
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata: {name: api-6d8f7c9b5-x2k4p, namespace: prod}
+containers:
+  - name: api
+    usage: {cpu: 640m, memory: 2100Mi}
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata: {name: api-6d8f7c9b5-m7q9z, namespace: prod}
+containers:
+  - name: api
+    usage: {cpu: 580m, memory: 2050Mi}
+---
+# Two replicas but no budget and no autoscaler, the default ServiceAccount,
+# and a payment key written into the manifest.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: prod}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      securityContext: {runAsNonRoot: true}
+      containers:
+        - name: web
+          image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/web:5.3.0
+          env:
+            - {name: STRIPE_API_KEY, value: placeholder-not-a-real-key}
+            - {name: API_URL, value: "http://api.prod.svc:8080"}
+          resources:
+            requests: {cpu: 200m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          readinessProbe: {httpGet: {path: /, port: 3000}}
+          livenessProbe: {httpGet: {path: /, port: 3000}}
+---
+# One replica, latest tag, no memory limit, no liveness probe.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: worker, namespace: prod}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: worker}}
+  template:
+    metadata: {labels: {app: worker}}
+    spec:
+      serviceAccountName: worker
+      securityContext: {runAsNonRoot: true}
+      containers:
+        - name: worker
+          image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/worker:latest
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+          readinessProbe: {exec: {command: ["/bin/healthcheck"]}}
+---
+# The database: single replica, and no backup covers its volume.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: postgres, namespace: prod}
+spec:
+  replicas: 1
+  serviceName: postgres
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      serviceAccountName: postgres
+      securityContext: {runAsNonRoot: true, runAsUser: 999}
+      containers:
+        - name: postgres
+          image: postgres:16.4
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 2Gi}
+          readinessProbe: {exec: {command: ["pg_isready"]}}
+          livenessProbe: {exec: {command: ["pg_isready"]}}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: data-postgres-0, namespace: prod}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: staging}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      serviceAccountName: api
+      securityContext: {runAsNonRoot: true}
+      containers:
+        - name: api
+          image: 482917365104.dkr.ecr.us-east-1.amazonaws.com/api:2.15.0-rc1
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /livez, port: 8080}}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: {name: log-agent, namespace: monitoring}
+spec:
+  selector: {matchLabels: {app: log-agent}}
+  template:
+    metadata: {labels: {app: log-agent}}
+    spec:
+      serviceAccountName: log-agent
+      securityContext: {runAsNonRoot: true}
+      containers:
+        - name: agent
+          image: public.ecr.aws/aws-observability/aws-for-fluent-bit:2.32.4
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          livenessProbe: {httpGet: {path: /api/v1/health, port: 2020}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: prod
+  annotations: {service.beta.kubernetes.io/aws-load-balancer-scheme: internal}
+spec: {type: LoadBalancer}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api, namespace: prod}
+spec: {type: ClusterIP}
+---
+# Only prod has a policy; staging and monitoring are wide open.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-ingress, namespace: prod}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: cluster-admin}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cluster-admin}
+subjects:
+  - {kind: Group, name: "system:masters"}
+---
+# The CI pipeline deploys as cluster-admin.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: ci-deployer-admin}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cluster-admin}
+subjects:
+  - {kind: ServiceAccount, name: ci-deployer, namespace: prod}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: worker, namespace: prod}
+rules:
+  - {apiGroups: [""], resources: ["configmaps"], verbs: ["get", "list", "watch"]}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: web-tls, namespace: prod}
+spec: {secretName: web-tls}
+status:
+  notAfter: "2027-01-20T08:00:00Z"
+  renewalTime: "2026-12-21T08:00:00Z"
+---
+# Left behind by a database that was deleted months ago.
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: pvc-8f2c1a7e-3b9d-4c55-9e0a-6d1f2b7c4a90}
+spec:
+  capacity: {storage: 200Gi}
+status: {phase: Released}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cluster-autoscaler, namespace: kube-system}
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: cluster-autoscaler
+          image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.33.0
+---
+apiVersion: velero.io/v1
+kind: Backup
+metadata: {name: daily-20261116020000, namespace: velero}
+status:
+  phase: Completed
+  completionTimestamp: "2026-11-16T02:07:41Z"
+---
+# Backs up only what is labelled for it, and the database is not.
+apiVersion: velero.io/v1
+kind: Schedule
+metadata: {name: daily, namespace: velero}
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces: ["*"]
+    labelSelector:
+      matchLabels: {backup: enabled}

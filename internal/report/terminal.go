@@ -17,8 +17,9 @@ var categoryNames = map[checks.Category]string{
 }
 
 // WriteSummary prints the short terminal summary: overall score, a score per
-// category and the top findings. reportPath is where the full report went.
-func WriteSummary(out io.Writer, r Report, reportPath string) error {
+// category and the top findings. reportPaths are the files that were written,
+// the main report first.
+func WriteSummary(out io.Writer, r Report, reportPaths ...string) error {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "ShipReady scan of %s", r.Cluster)
@@ -73,7 +74,13 @@ func WriteSummary(out io.Writer, r Report, reportPath string) error {
 	if r.Summary.Skipped > 0 {
 		fmt.Fprintf(&b, "\n%s not run; the report lists each one with the reason.\n", plural(r.Summary.Skipped, "check was", "checks were"))
 	}
-	fmt.Fprintf(&b, "\nFull report: %s\n", reportPath)
+	for i, path := range reportPaths {
+		if i == 0 {
+			fmt.Fprintf(&b, "\nFull report: %s\n", path)
+		} else {
+			fmt.Fprintf(&b, "Also written: %s\n", path)
+		}
+	}
 
 	_, err := io.WriteString(out, b.String())
 	return err
