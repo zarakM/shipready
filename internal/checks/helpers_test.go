@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +14,10 @@ import (
 
 	"github.com/zarakM/shipready/internal/collect"
 )
+
+// testNow is the moment every test scan is taken. Dates in the fixtures are
+// written relative to it.
+var testNow = time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
 
 // fixture loads testdata/<name> into a snapshot.
 func fixture(t *testing.T, name string) *collect.Snapshot {
@@ -30,14 +35,37 @@ func snapshot(t *testing.T, objs ...runtime.Object) *collect.Snapshot {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.CollectedAt = testNow
 	return s
 }
 
-// forbidden returns the good fixture with one resource type made unreadable.
+func errDenied(resource string) error {
+	return apierrors.NewForbidden(schema.GroupResource{Resource: resource}, "", errors.New("denied"))
+}
+
+// forbidden returns the M1 good fixture with one resource type made unreadable.
 func forbidden(t *testing.T, resource string) *collect.Snapshot {
 	t.Helper()
-	s := fixture(t, "rel/good.yaml")
-	s.Errors[resource] = apierrors.NewForbidden(schema.GroupResource{Resource: resource}, "", errors.New("denied"))
+	return deny(fixture(t, "rel/good.yaml"), resource)
+}
+
+// deny marks resource types as unreadable.
+func deny(s *collect.Snapshot, resources ...string) *collect.Snapshot {
+	for _, r := range resources {
+		s.Errors[r] = errDenied(r)
+	}
+	return s
+}
+
+// with applies changes to a snapshot inline, for table entries.
+func with(s *collect.Snapshot, change func(*collect.Snapshot)) *collect.Snapshot {
+	change(s)
+	return s
+}
+
+// namespaceLimited marks the snapshot as coming from a --namespace scan.
+func namespaceLimited(s *collect.Snapshot) *collect.Snapshot {
+	s.ClusterWide = false
 	return s
 }
 

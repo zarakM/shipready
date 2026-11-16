@@ -51,11 +51,10 @@ func NewRegistry(cs ...Check) (*Registry, error) {
 // Default returns the registry of built-in checks.
 func Default() *Registry {
 	r, err := NewRegistry(
-		rel001,
-		rel002,
-		rel003,
-		rel004,
-		rel005,
+		rel001, rel002, rel003, rel004, rel005, rel006, rel007, rel008, rel009, rel010,
+		sec001, sec002, sec003, sec004, sec005, sec006, sec007, sec008,
+		cost001, cost002, cost003, cost004,
+		rec001, rec002, rec003,
 	)
 	if err != nil {
 		panic(err) // a programming error caught by the registry test

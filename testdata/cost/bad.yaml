@@ -1,0 +1,261 @@
+# Problems for COST-001 to COST-004. Clock fixed at 2026-11-16T12:00:00Z.
+#
+# Node "big-idle" has 4 CPU / 16Gi and carries 250m / 576Mi of requests.
+# Node "busy" has 4 CPU / 16Gi and carries 4000m / 3Gi of requests.
+apiVersion: v1
+kind: Node
+metadata:
+  name: big-idle
+status:
+  allocatable:
+    cpu: "4"
+    memory: 16Gi
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: busy
+status:
+  allocatable:
+    cpu: "4"
+    memory: 16Gi
+---
+# Requests 3 CPU and uses 150m: far over-provisioned on CPU.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c9d
+      uid: 00000000-0000-0000-0000-000000000001
+spec:
+  nodeName: busy
+  containers:
+    - name: api
+      image: registry.example.com/api:1.4.2
+      resources:
+        requests:
+          cpu: "3"
+          memory: 2Gi
+status:
+  phase: Running
+  startTime: "2026-11-16T08:00:00Z"
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata:
+  name: api-1
+  namespace: shop
+containers:
+  - name: api
+    usage:
+      cpu: 150m
+      memory: 1500Mi
+---
+# Sized sensibly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-1
+  namespace: shop
+  labels:
+    app: frontend
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: frontend-7b6f
+      uid: 00000000-0000-0000-0000-000000000002
+spec:
+  nodeName: big-idle
+  containers:
+    - name: frontend
+      image: registry.example.com/frontend:3.1.0
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+status:
+  phase: Running
+  startTime: "2026-11-16T08:00:00Z"
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata:
+  name: frontend-1
+  namespace: shop
+containers:
+  - name: frontend
+    usage:
+      cpu: 120m
+      memory: 400Mi
+---
+# Barely used, but its requests are too small to be worth flagging.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiny
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tiny
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tiny-1
+  namespace: shop
+  labels:
+    app: tiny
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: tiny-1a2b
+      uid: 00000000-0000-0000-0000-000000000003
+spec:
+  nodeName: big-idle
+  containers:
+    - name: tiny
+      image: registry.example.com/tiny:0.1.0
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+status:
+  phase: Running
+  startTime: "2026-11-16T08:00:00Z"
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata:
+  name: tiny-1
+  namespace: shop
+containers:
+  - name: tiny
+    usage:
+      cpu: 1m
+      memory: 10Mi
+---
+# Started two minutes ago: too young for its usage to mean anything.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fresh
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fresh
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fresh-1
+  namespace: shop
+  labels:
+    app: fresh
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: fresh-9z8y
+      uid: 00000000-0000-0000-0000-000000000004
+spec:
+  nodeName: busy
+  containers:
+    - name: fresh
+      image: registry.example.com/fresh:0.1.0
+      resources:
+        requests:
+          cpu: "1"
+          memory: 1Gi
+status:
+  phase: Running
+  startTime: "2026-11-16T11:58:00Z"
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata:
+  name: fresh-1
+  namespace: shop
+containers:
+  - name: fresh
+    usage:
+      cpu: 10m
+      memory: 20Mi
+---
+# A finished pod on big-idle: its requests no longer count against the node.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: done-job
+  namespace: shop
+spec:
+  nodeName: big-idle
+  containers:
+    - name: job
+      image: registry.example.com/job:0.1.0
+      resources:
+        requests:
+          cpu: "3"
+          memory: 12Gi
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-released
+spec:
+  capacity:
+    storage: 100Gi
+status:
+  phase: Released
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-available
+spec:
+  capacity:
+    storage: 20Gi
+status:
+  phase: Available
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-bound
+spec:
+  capacity:
+    storage: 50Gi
+status:
+  phase: Bound
