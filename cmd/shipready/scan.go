@@ -139,7 +139,9 @@ func printSummary(out io.Writer, rep report.Report, path string) error {
 		case checks.Skipped:
 			note = "(" + c.SkipReason + ")"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s %s\n", strings.ToUpper(string(c.Status)), c.ID, c.Severity, c.Title, note)
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s %s\n", strings.ToUpper(string(c.Status)), c.ID, c.Severity, c.Title, note); err != nil {
+			return err
+		}
 	}
 	if err := w.Flush(); err != nil {
 		return err
