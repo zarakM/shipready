@@ -163,7 +163,7 @@
     <p class="no-match" hidden>No findings of this severity in {{.Name}}.</p>
     {{- if .PassedChecks}}
     <details class="passed">
-      <summary>{{len .PassedChecks}} passed</summary>
+      <summary>{{len .PassedChecks}} passed: these problems were looked for and not found</summary>
       <ul>
         {{- range .PassedChecks}}
         <li><span class="check-id">{{.ID}}</span> {{md .Title}}</li>
