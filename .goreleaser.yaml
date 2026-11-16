@@ -1,0 +1,57 @@
+# Release builds for ShipReady. Validate with `goreleaser check`, and try a
+# local build without publishing with `goreleaser release --snapshot --clean`.
+version: 2
+
+project_name: shipready
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: shipready
+    main: ./cmd/shipready
+    binary: shipready
+    # A single static binary with no runtime dependencies.
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    # CTAURL is the report's "Book a call" link. When the variable is not set
+    # the button is left out of reports.
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.CTAURL={{ envOrDefault "CTAURL" "" }}
+
+archives:
+  - id: shipready
+    # No version in the file name, so the "latest" download link stays the
+    # same from release to release.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - deploy/**/*
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge "
+
+release:
+  # Releases are created as drafts, to be looked over and published by hand.
+  draft: true

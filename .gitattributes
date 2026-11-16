@@ -1,0 +1,4 @@
+# Fixtures and the sample report are compared byte for byte in tests, so they
+# must have the same line endings on every platform.
+* text=auto eol=lf
+*.png binary

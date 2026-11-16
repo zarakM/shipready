@@ -29,6 +29,7 @@ internal/collect/     cluster and cloud data collection (read-only clients)
 internal/score/       scoring logic
 internal/report/      HTML and JSON renderers, embedded templates
 testdata/             fixture manifests used by tests
+deploy/               ClusterRole and IAM policy users apply for the scanner
 docs/SPEC.md          product spec and milestones
 ```
 
