@@ -1,37 +1,81 @@
 package checks
 
 import (
-	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/zarakM/shipready/internal/collect"
 )
 
-func TestDefaultRegistryMetadata(t *testing.T) {
-	idPattern := regexp.MustCompile(`^(REL|SEC|COST|REC|AWS)-\d{3}$`)
-	severities := map[Severity]bool{Critical: true, High: true, Medium: true, Low: true}
-	categories := map[Category]bool{}
-	for _, c := range Categories {
-		categories[c] = true
-	}
+// specChecks is the check table from docs/SPEC.md section 6, Kubernetes
+// checks only. The registry must match it exactly.
+var specChecks = map[string]struct {
+	category Category
+	severity Severity
+}{
+	"REL-001": {Reliability, High}, "REL-002": {Reliability, High}, "REL-003": {Reliability, High},
+	"REL-004": {Reliability, Medium}, "REL-005": {Reliability, Medium}, "REL-006": {Reliability, High},
+	"REL-007": {Reliability, Low}, "REL-008": {Reliability, Critical}, "REL-009": {Reliability, High},
+	"REL-010": {Reliability, Medium},
+	"SEC-001": {Security, High}, "SEC-002": {Security, Critical}, "SEC-003": {Security, High},
+	"SEC-004": {Security, High}, "SEC-005": {Security, Medium}, "SEC-006": {Security, Medium},
+	"SEC-007": {Security, High}, "SEC-008": {Security, Low},
+	"COST-001": {Cost, Medium}, "COST-002": {Cost, Medium}, "COST-003": {Cost, Low}, "COST-004": {Cost, Medium},
+	"REC-001": {Recovery, Critical}, "REC-002": {Recovery, High}, "REC-003": {Recovery, High},
+}
 
+func TestDefaultRegistryMatchesSpec(t *testing.T) {
 	all := Default().All()
-	if len(all) != 5 {
-		t.Errorf("registered checks = %d, want 5 for milestone 1", len(all))
+	if len(all) != len(specChecks) {
+		t.Errorf("registered checks = %d, want %d", len(all), len(specChecks))
 	}
 	for _, c := range all {
 		m := c.Meta()
-		if !idPattern.MatchString(c.ID()) {
-			t.Errorf("%s: ID does not match the stable ID format", c.ID())
+		want, ok := specChecks[c.ID()]
+		if !ok {
+			t.Errorf("%s is registered but not in the spec", c.ID())
+			continue
 		}
-		if !severities[m.Severity] {
-			t.Errorf("%s: unknown severity %q", c.ID(), m.Severity)
-		}
-		if !categories[m.Category] {
-			t.Errorf("%s: unknown category %q", c.ID(), m.Category)
+		if m.Category != want.category || m.Severity != want.severity {
+			t.Errorf("%s = %s/%s, spec says %s/%s", c.ID(), m.Category, m.Severity, want.category, want.severity)
 		}
 		if m.Title == "" || m.Description == "" || m.Remediation == "" {
 			t.Errorf("%s: title, description and remediation are all required", c.ID())
+		}
+		if strings.ContainsAny(m.Remediation, "\n") {
+			t.Errorf("%s: remediation is shown as a one-line fix and must not contain line breaks", c.ID())
+		}
+	}
+}
+
+// Every check must cope with a cluster that has nothing in it, and with one
+// where nothing could be listed, without panicking.
+func TestChecksHandleEmptyAndUnreadableClusters(t *testing.T) {
+	unreadable := collect.NewSnapshot()
+	for _, res := range []string{
+		collect.ResNamespaces, collect.ResDeployments, collect.ResStatefulSets, collect.ResDaemonSets,
+		collect.ResCronJobs, collect.ResPods, collect.ResPDBs, collect.ResNodes, collect.ResHPAs,
+		collect.ResServices, collect.ResServiceAccounts, collect.ResRoles, collect.ResClusterRoles,
+		collect.ResClusterRoleBindings, collect.ResNetworkPolicies, collect.ResPVs, collect.ResPVCs,
+	} {
+		unreadable.Errors[res] = errDenied(res)
+	}
+	limited := collect.NewSnapshot()
+	limited.ClusterWide = false
+
+	// An empty cluster really does have no node autoscaler, so COST-004 is
+	// right to fail there.
+	failsWhenEmpty := map[string]bool{"COST-004": true}
+
+	for _, c := range Default().All() {
+		if got := c.Run(collect.NewSnapshot()); got.Status == Fail && !failsWhenEmpty[c.ID()] {
+			t.Errorf("%s fails on an empty cluster: %v", c.ID(), got.Resources)
+		}
+		if got := c.Run(unreadable); got.Status != Skipped || got.SkipReason == "" {
+			t.Errorf("%s = %s on a cluster where nothing can be listed, want skipped with a reason", c.ID(), got.Status)
+		}
+		if got := c.Run(limited); got.Status == Fail {
+			t.Errorf("%s fails on an empty namespace-limited scan: %v", c.ID(), got.Resources)
 		}
 	}
 }
@@ -54,17 +98,14 @@ func TestNewRegistryRejectsBadIDs(t *testing.T) {
 }
 
 func TestRegistryOrdersByCategoryThenID(t *testing.T) {
-	stub := func(id string, cat Category) Check {
-		return check{id: id, meta: Meta{Category: cat}}
+	var got []string
+	for _, c := range Default().All() {
+		got = append(got, c.ID())
 	}
-	r, err := NewRegistry(stub("COST-001", Cost), stub("REL-002", Reliability), stub("SEC-001", Security), stub("REL-001", Reliability))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"REL-001", "REL-002", "SEC-001", "COST-001"}
-	for i, c := range r.All() {
-		if c.ID() != want[i] {
-			t.Errorf("position %d = %s, want %s", i, c.ID(), want[i])
+	joined := strings.Join(got, " ")
+	for _, want := range []string{"REL-001 REL-002", "REL-010 SEC-001", "SEC-008 COST-001", "COST-004 REC-001"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("order %q does not contain %q", joined, want)
 		}
 	}
 }
@@ -72,17 +113,22 @@ func TestRegistryOrdersByCategoryThenID(t *testing.T) {
 func TestRegistrySkip(t *testing.T) {
 	r := Default()
 	snap := collect.NewSnapshot()
+	baseline := 0
+	for _, o := range r.Run(snap, nil) {
+		if o.Result.Status == Skipped {
+			baseline++
+		}
+	}
 
 	cases := []struct {
-		name        string
-		skip        []string
-		wantSkipped int
-		wantErr     bool
+		name      string
+		skip      []string
+		wantExtra int // skipped checks beyond those that skip themselves
+		wantErr   bool
 	}{
 		{"nothing skipped", nil, 0, false},
 		{"by ID, case-insensitive", []string{"rel-001", "REL-003"}, 2, false},
-		{"by category", []string{"Reliability"}, 5, false},
-		{"category with no checks yet is valid", []string{"cost"}, 0, false},
+		{"by category", []string{"Security"}, 8, false},
 		{"unknown value", []string{"REL-999"}, 0, true},
 	}
 	for _, tc := range cases {
@@ -103,8 +149,8 @@ func TestRegistrySkip(t *testing.T) {
 					}
 				}
 			}
-			if skippedCount != tc.wantSkipped {
-				t.Errorf("skipped = %d, want %d", skippedCount, tc.wantSkipped)
+			if skippedCount-baseline != tc.wantExtra {
+				t.Errorf("extra skipped = %d, want %d", skippedCount-baseline, tc.wantExtra)
 			}
 		})
 	}

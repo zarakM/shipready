@@ -5,14 +5,14 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/zarakM/shipready/internal/checks"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
-// connectFunc builds a cluster client for a kubeconfig context and returns
-// the cluster's name. Tests replace it with a fake.
-type connectFunc func(kubeContext string) (kubernetes.Interface, string, error)
+// connectFunc builds cluster clients for a kubeconfig context and returns the
+// cluster's name. Tests replace it with a fake.
+type connectFunc func(kubeContext string) (collect.Clients, string, error)
 
 func newRootCmd(version string, connect connectFunc) *cobra.Command {
 	root := &cobra.Command{

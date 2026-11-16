@@ -1,0 +1,80 @@
+# Passes COST-001 to COST-004. Clock fixed at 2026-11-16T12:00:00Z.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+status:
+  allocatable:
+    cpu: "2"
+    memory: 4Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c9d
+      uid: 00000000-0000-0000-0000-000000000001
+spec:
+  nodeName: worker
+  containers:
+    - name: api
+      image: registry.example.com/api:1.4.2
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+status:
+  phase: Running
+  startTime: "2026-11-16T08:00:00Z"
+---
+apiVersion: metrics.k8s.io/v1beta1
+kind: PodMetrics
+metadata:
+  name: api-1
+  namespace: shop
+containers:
+  - name: api
+    usage:
+      cpu: 600m
+      memory: 1400Mi
+---
+# The autoscaler lives in kube-system, which the snapshot still holds.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-autoscaler
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: cluster-autoscaler
+          image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.33.0
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-bound
+spec:
+  capacity:
+    storage: 50Gi
+status:
+  phase: Bound

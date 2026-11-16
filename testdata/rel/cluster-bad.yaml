@@ -1,0 +1,171 @@
+# Problems for REL-006 to REL-010. Tests run with the clock fixed at
+# 2026-11-16T12:00:00Z, which the certificate dates below are relative to.
+apiVersion: v1
+kind: Node
+metadata:
+  name: n1
+  labels:
+    topology.kubernetes.io/zone: us-east-1a
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: n2
+  labels:
+    topology.kubernetes.io/zone: us-east-1a
+---
+# Single replica, no autoscaler, latest tag.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: checkout
+          image: registry.example.com/checkout:latest
+---
+# Single replica with an autoscaler whose minimum is 1. No image tag.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: search
+          image: search
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: search
+  namespace: shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: search
+  minReplicas: 1
+  maxReplicas: 5
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: queue
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: queue
+          image: registry.example.com:5000/queue:3.13
+---
+# Scaled to zero: exempt from the replica and autoscaler checks.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idle
+  namespace: shop
+spec:
+  replicas: 0
+  template:
+    spec:
+      containers:
+        - name: idle
+          image: registry.example.com/idle:1.0.0
+---
+# Non-production namespace: a single replica is fine here. The main image is
+# pinned by digest, but the init container uses the latest tag.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-preview
+  namespace: staging
+spec:
+  replicas: 1
+  template:
+    spec:
+      initContainers:
+        - name: setup
+          image: busybox:latest
+      containers:
+        - name: checkout
+          image: registry.example.com/checkout@sha256:4bd1a5c3a8f0e6d2b7c9e1f3a5b7d9c1e3f5a7b9d1c3e5f7a9b1d3c5e7f9a1b3
+---
+# System namespace: never judged on a cluster-wide scan.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: coredns
+          image: coredns:latest
+---
+# Expires in 10 days and its renewal is overdue.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-tls
+  namespace: shop
+spec:
+  secretName: api-tls
+status:
+  notAfter: "2026-11-26T12:00:00Z"
+  renewalTime: "2026-10-27T12:00:00Z"
+---
+# Already expired.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: old-tls
+  namespace: shop
+spec:
+  secretName: old-tls
+status:
+  notAfter: "2026-11-10T12:00:00Z"
+  renewalTime: "2026-10-11T12:00:00Z"
+---
+# Short-lived by design: expires tomorrow, renewal is scheduled and not yet due.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: short-lived
+  namespace: shop
+spec:
+  secretName: short-lived
+status:
+  notAfter: "2026-11-17T12:00:00Z"
+  renewalTime: "2026-11-17T04:00:00Z"
+---
+# Not issued yet: no expiry to judge.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pending
+  namespace: shop
+spec:
+  secretName: pending
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: healthy
+  namespace: shop
+spec:
+  secretName: healthy
+status:
+  notAfter: "2027-02-01T12:00:00Z"
+  renewalTime: "2027-01-02T12:00:00Z"

@@ -1,0 +1,135 @@
+# Problems for REC-002 and REC-003. Velero is installed here, so REC-001
+# passes. Clock fixed at 2026-11-16T12:00:00Z.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+---
+# Covered by a recent volume snapshot.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kv
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kv
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+---
+# No volumes, so nothing to back up.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stateless-set
+  namespace: shop
+spec:
+  replicas: 1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-db-0
+  namespace: shop
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-kv-0
+  namespace: shop
+---
+# Last success was 15 days ago.
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: nightly-20261101
+  namespace: velero
+status:
+  phase: Completed
+  completionTimestamp: "2026-11-01T12:00:00Z"
+---
+# Recent, but it failed.
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: nightly-20261115
+  namespace: velero
+status:
+  phase: Failed
+  completionTimestamp: "2026-11-15T12:00:00Z"
+---
+# Covers a different namespace.
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: billing-only
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces: ["billing"]
+---
+# Would cover everything, but it is paused.
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: everything-paused
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  paused: true
+  template:
+    includedNamespaces: ["*"]
+---
+# Covers the namespace, but only objects labelled app=other.
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: other-app
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces: ["shop"]
+    labelSelector:
+      matchLabels:
+        app: other
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: kv-daily
+  namespace: shop
+spec:
+  source:
+    persistentVolumeClaimName: data-kv-0
+status:
+  readyToUse: true
+  creationTime: "2026-11-15T12:00:00Z"
+---
+# A snapshot of db exists, but it is six weeks old.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: db-old
+  namespace: shop
+spec:
+  source:
+    persistentVolumeClaimName: data-db-0
+status:
+  readyToUse: true
+  creationTime: "2026-10-01T12:00:00Z"

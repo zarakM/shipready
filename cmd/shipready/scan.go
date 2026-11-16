@@ -3,10 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,6 +20,7 @@ type scanOptions struct {
 	output      string
 	formats     []string
 	skip        []string
+	failOn      string
 }
 
 func newScanCmd(version string, connect connectFunc) *cobra.Command {
@@ -40,6 +39,7 @@ func newScanCmd(version string, connect connectFunc) *cobra.Command {
 	f.StringVar(&opts.output, "output", "./shipready-report.json", "report path")
 	f.StringSliceVar(&opts.formats, "format", []string{"json"}, "report format: json (html arrives in a later release)")
 	f.StringSliceVar(&opts.skip, "skip", nil, "check IDs or categories to skip")
+	f.StringVar(&opts.failOn, "fail-on", "", "exit with code 2 if a check of this severity or above fails: critical or high")
 	return cmd
 }
 
@@ -57,6 +57,15 @@ func validateFormats(formats []string) error {
 		}
 	}
 	return nil
+}
+
+// parseFailOn returns the severity threshold, or "" when the flag is unset.
+func parseFailOn(value string) (checks.Severity, error) {
+	switch v := checks.Severity(strings.ToLower(strings.TrimSpace(value))); v {
+	case "", checks.Critical, checks.High:
+		return v, nil
+	}
+	return "", fmt.Errorf("unknown --fail-on value %q; use critical or high", value)
 }
 
 // dedupe trims values and drops blanks and repeats, keeping order.
@@ -82,13 +91,17 @@ func runScan(cmd *cobra.Command, version string, connect connectFunc, opts scanO
 	if err := registry.ValidateSkip(opts.skip); err != nil {
 		return err
 	}
-	namespaces := dedupe(opts.namespaces)
-
-	client, clusterName, err := connect(opts.kubeContext)
+	failOn, err := parseFailOn(opts.failOn)
 	if err != nil {
 		return err
 	}
-	snap, err := collect.Collect(cmd.Context(), client, collect.Options{Namespaces: namespaces})
+	namespaces := dedupe(opts.namespaces)
+
+	clients, clusterName, err := connect(opts.kubeContext)
+	if err != nil {
+		return err
+	}
+	snap, err := collect.Collect(cmd.Context(), clients, collect.Options{Namespaces: namespaces})
 	if err != nil {
 		return err
 	}
@@ -104,7 +117,13 @@ func runScan(cmd *cobra.Command, version string, connect connectFunc, opts scanO
 	if err := writeJSONFile(opts.output, rep); err != nil {
 		return fmt.Errorf("writing report: %w", err)
 	}
-	return printSummary(cmd.OutOrStdout(), rep, opts.output)
+	if err := report.WriteSummary(cmd.OutOrStdout(), rep, opts.output); err != nil {
+		return err
+	}
+	if failOn != "" && rep.Failed(failOn) {
+		return &failOnError{severity: string(failOn)}
+	}
+	return nil
 }
 
 func writeJSONFile(path string, rep report.Report) (err error) {
@@ -118,36 +137,4 @@ func writeJSONFile(path string, rep report.Report) (err error) {
 		}
 	}()
 	return report.WriteJSON(f, rep)
-}
-
-// printSummary is a plain status listing. The scored summary with top
-// findings replaces it in milestone 2.
-func printSummary(out io.Writer, rep report.Report, path string) error {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Cluster: %s", rep.Cluster)
-	if rep.KubernetesVersion != "" {
-		fmt.Fprintf(&b, " (Kubernetes %s)", rep.KubernetesVersion)
-	}
-	fmt.Fprintf(&b, "\nChecks:  %d failed, %d passed, %d skipped\n\n", rep.Summary.Failed, rep.Summary.Passed, rep.Summary.Skipped)
-
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	for _, c := range rep.Checks {
-		note := ""
-		switch c.Status {
-		case checks.Fail:
-			note = fmt.Sprintf("(%d affected)", len(c.Resources))
-		case checks.Skipped:
-			note = "(" + c.SkipReason + ")"
-		}
-		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s %s\n", strings.ToUpper(string(c.Status)), c.ID, c.Severity, c.Title, note); err != nil {
-			return err
-		}
-	}
-	if err := w.Flush(); err != nil {
-		return err
-	}
-	fmt.Fprintf(&b, "\nReport written to %s\n", path)
-
-	_, err := io.WriteString(out, b.String())
-	return err
 }

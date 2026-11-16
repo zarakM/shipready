@@ -1,0 +1,40 @@
+# Passes REC-001 to REC-003. Clock fixed at 2026-11-16T12:00:00Z.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: shop
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-db-0
+  namespace: shop
+---
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: nightly-20261116
+  namespace: velero
+status:
+  phase: Completed
+  completionTimestamp: "2026-11-16T02:10:00Z"
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: nightly
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    excludedNamespaces: ["kube-system"]

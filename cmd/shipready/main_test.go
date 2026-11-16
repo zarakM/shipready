@@ -9,27 +9,26 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-
 	"github.com/zarakM/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect/collecttest"
 	"github.com/zarakM/shipready/internal/report"
+)
+
+const root = "../.."
+
+// A cluster with problems in every category, and one with none that the
+// fixtures can express.
+var (
+	badCluster  = []string{"rel/bad.yaml", "rel/cluster-bad.yaml", "sec/bad.yaml", "cost/bad.yaml", "rec/bad.yaml"}
+	goodCluster = []string{"rel/good.yaml"}
 )
 
 // fakeCluster returns a connectFunc serving the given fixtures.
 func fakeCluster(t *testing.T, fixtures ...string) connectFunc {
 	t.Helper()
-	var objs []runtime.Object
-	for _, name := range fixtures {
-		loaded, err := collect.LoadManifests(filepath.Join("..", "..", "testdata", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		objs = append(objs, loaded...)
-	}
-	return func(string) (kubernetes.Interface, string, error) {
-		return fake.NewClientset(objs...), "demo-cluster", nil
+	objs := collecttest.Load(t, root, fixtures...)
+	return func(string) (collect.Clients, string, error) {
+		return collecttest.NewCluster(t, objs...).Clients(), "demo-cluster", nil
 	}
 }
 
@@ -57,34 +56,64 @@ func readReport(t *testing.T, path string) report.Report {
 	return rep
 }
 
+func statuses(rep report.Report) map[string]string {
+	out := map[string]string{}
+	for _, c := range rep.Checks {
+		out[c.ID] = string(c.Status)
+	}
+	return out
+}
+
 func TestScanWritesJSONReport(t *testing.T) {
 	cases := []struct {
 		name     string
 		fixtures []string
 		args     []string
-		want     map[string]string // check ID -> status
+		want     map[string]string // check ID -> status, for the checks that matter to the case
 	}{
 		{
-			name:     "healthy cluster passes everything",
-			fixtures: []string{"rel/good.yaml"},
-			want:     map[string]string{"REL-001": "pass", "REL-002": "pass", "REL-003": "pass", "REL-004": "pass", "REL-005": "pass"},
+			name:     "healthy workloads",
+			fixtures: goodCluster,
+			want: map[string]string{
+				"REL-001": "pass", "REL-002": "pass", "REL-003": "pass", "REL-004": "pass", "REL-005": "pass",
+				// Add-ons that are not installed lead to skips, not failures.
+				"REL-009": "skipped", "COST-001": "skipped", "REC-002": "skipped",
+			},
 		},
 		{
-			name:     "problem cluster fails everything",
-			fixtures: []string{"rel/good.yaml", "rel/bad.yaml"},
-			want:     map[string]string{"REL-001": "fail", "REL-002": "fail", "REL-003": "fail", "REL-004": "fail", "REL-005": "fail"},
+			name:     "problems in every category",
+			fixtures: badCluster,
+			want: map[string]string{
+				"REL-001": "fail", "REL-002": "fail", "REL-003": "fail", "REL-004": "fail", "REL-005": "fail",
+				"REL-006": "fail", "REL-007": "fail", "REL-008": "fail", "REL-009": "fail", "REL-010": "fail",
+				"SEC-001": "fail", "SEC-002": "fail", "SEC-003": "fail", "SEC-004": "fail",
+				"SEC-005": "fail", "SEC-006": "fail", "SEC-007": "fail", "SEC-008": "fail",
+				"COST-001": "fail", "COST-002": "fail", "COST-003": "fail", "COST-004": "fail",
+				"REC-001": "pass", "REC-002": "fail", "REC-003": "fail",
+			},
 		},
 		{
 			name:     "skip flag",
-			fixtures: []string{"rel/bad.yaml"},
-			args:     []string{"--skip", "REL-002,rel-005"},
-			want:     map[string]string{"REL-001": "fail", "REL-002": "skipped", "REL-003": "fail", "REL-004": "fail", "REL-005": "skipped"},
+			fixtures: badCluster,
+			args:     []string{"--skip", "REL-002,rel-005,cost"},
+			want: map[string]string{
+				"REL-001": "fail", "REL-002": "skipped", "REL-005": "skipped",
+				"COST-001": "skipped", "COST-002": "skipped", "COST-003": "skipped", "COST-004": "skipped",
+				"SEC-001": "fail",
+			},
 		},
 		{
-			name:     "namespace filter with no workloads in it",
-			fixtures: []string{"rel/bad.yaml"},
-			args:     []string{"--namespace", "empty"},
-			want:     map[string]string{"REL-001": "pass", "REL-002": "pass", "REL-003": "pass", "REL-004": "pass", "REL-005": "pass"},
+			name:     "namespace filter",
+			fixtures: badCluster,
+			args:     []string{"--namespace", "billing"},
+			want: map[string]string{
+				// billing is set up correctly in the fixtures.
+				"SEC-001": "pass", "SEC-004": "pass", "SEC-005": "pass", "SEC-008": "pass",
+				// Checks that need the whole cluster say so.
+				"COST-002": "skipped", "COST-004": "skipped", "REC-001": "skipped",
+				// Cluster-scoped findings are still reported.
+				"SEC-002": "fail", "REL-008": "fail",
+			},
 		},
 	}
 	for _, tc := range cases {
@@ -99,16 +128,60 @@ func TestScanWritesJSONReport(t *testing.T) {
 			if rep.Cluster != "demo-cluster" || rep.Tool.Version != "test" || rep.ScanTime == "" {
 				t.Errorf("header = cluster %q, version %q, time %q", rep.Cluster, rep.Tool.Version, rep.ScanTime)
 			}
-			if len(rep.Checks) != len(tc.want) {
-				t.Fatalf("checks = %d, want %d", len(rep.Checks), len(tc.want))
+			if len(rep.Checks) != 25 {
+				t.Fatalf("checks = %d, want 25", len(rep.Checks))
 			}
-			for _, c := range rep.Checks {
-				if string(c.Status) != tc.want[c.ID] {
-					t.Errorf("%s = %s, want %s", c.ID, c.Status, tc.want[c.ID])
+			got := statuses(rep)
+			for id, want := range tc.want {
+				if got[id] != want {
+					t.Errorf("%s = %s, want %s", id, got[id], want)
 				}
 			}
-			if !strings.Contains(out, "demo-cluster") || !strings.Contains(out, path) {
-				t.Errorf("terminal output should name the cluster and the report path:\n%s", out)
+			if rep.Score.Overall == nil || len(rep.Score.Categories) != 4 {
+				t.Errorf("report has no score: %+v", rep.Score)
+			}
+			for _, want := range []string{"demo-cluster", "Overall score:", path} {
+				if !strings.Contains(out, want) {
+					t.Errorf("terminal output is missing %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+func TestScanFailOn(t *testing.T) {
+	cases := []struct {
+		name     string
+		fixtures []string
+		args     []string
+		tripped  bool
+	}{
+		{"no flag never fails the run", badCluster, nil, false},
+		{"critical findings trip critical", badCluster, []string{"--fail-on", "critical"}, true},
+		{"critical findings trip high", badCluster, []string{"--fail-on", "high"}, true},
+		{"high findings do not trip critical", []string{"rel/bad.yaml"}, []string{"--fail-on", "critical"}, false},
+		{"high findings trip high", []string{"rel/bad.yaml"}, []string{"--fail-on", "HIGH"}, true},
+		{"clean workloads do not trip high", goodCluster, []string{"--fail-on", "high", "--skip", "security"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "report.json")
+			args := append([]string{"scan", "--output", path}, tc.args...)
+			out, err := run(t, fakeCluster(t, tc.fixtures...), args...)
+
+			var failOn *failOnError
+			if got := errors.As(err, &failOn); got != tc.tripped {
+				t.Fatalf("fail-on tripped = %v (err: %v), want %v\n%s", got, err, tc.tripped, out)
+			}
+			if err != nil && !tc.tripped {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// The report and summary are written either way.
+			if _, statErr := os.Stat(path); statErr != nil {
+				t.Errorf("report was not written: %v", statErr)
+			}
+			if !strings.Contains(out, "Overall score:") {
+				t.Errorf("summary was not printed:\n%s", out)
 			}
 		})
 	}
@@ -123,14 +196,15 @@ func TestScanRejectsBadInput(t *testing.T) {
 		{"html not available yet", []string{"--format", "html"}, "not available yet"},
 		{"unknown format", []string{"--format", "pdf"}, "unknown format"},
 		{"unknown skip value", []string{"--skip", "REL-999"}, "REL-999"},
+		{"unknown fail-on value", []string{"--fail-on", "medium"}, "critical or high"},
 		{"positional argument", []string{"extra"}, "unknown command"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			connected := false
-			connect := func(string) (kubernetes.Interface, string, error) {
+			connect := func(string) (collect.Clients, string, error) {
 				connected = true
-				return fake.NewClientset(), "demo", nil
+				return collecttest.NewCluster(t).Clients(), "demo", nil
 			}
 			path := filepath.Join(t.TempDir(), "report.json")
 			_, err := run(t, connect, append([]string{"scan", "--output", path}, tc.args...)...)
@@ -148,11 +222,33 @@ func TestScanRejectsBadInput(t *testing.T) {
 }
 
 func TestScanReportsConnectionFailure(t *testing.T) {
-	connect := func(string) (kubernetes.Interface, string, error) {
-		return nil, "", errors.New("kubeconfig context \"nope\" not found")
+	connect := func(string) (collect.Clients, string, error) {
+		return collect.Clients{}, "", errors.New("kubeconfig context \"nope\" not found")
 	}
 	if _, err := run(t, connect, "scan", "--context", "nope"); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+// The scan must never write a secret value anywhere: not the report, not the
+// terminal.
+func TestScanNeverOutputsSecretValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.json")
+	out, err := run(t, fakeCluster(t, badCluster...), "scan", "--output", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// sec/bad.yaml sets DB_PASSWORD and API_TOKEN to values starting with this.
+	const marker = "not-a-real"
+	if strings.Contains(string(data), marker) || strings.Contains(out, marker) {
+		t.Error("an environment variable value reached the output")
+	}
+	if !strings.Contains(string(data), "DB_PASSWORD") {
+		t.Error("the report should still name the variable")
 	}
 }
 
@@ -161,10 +257,13 @@ func TestChecksAndVersionCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"REL-001", "REL-002", "REL-003", "REL-004", "REL-005"} {
+	for _, id := range []string{"REL-001", "REL-010", "SEC-001", "SEC-008", "COST-001", "COST-004", "REC-001", "REC-003"} {
 		if !strings.Contains(out, id) {
 			t.Errorf("checks output is missing %s:\n%s", id, out)
 		}
+	}
+	if lines := strings.Count(strings.TrimSpace(out), "\n"); lines != 25 {
+		t.Errorf("checks output has %d rows after the header, want 25", lines)
 	}
 
 	out, err = run(t, nil, "version")
