@@ -1,0 +1,27 @@
+{
+  "Region": "us-east-1",
+  "ClusterName": "acme-prod-eks",
+  "Cluster": {
+    "Name": "acme-prod-eks",
+    "Version": "1.33",
+    "VPCID": "vpc-0a1b2c3d",
+    "EndpointPublic": true,
+    "PublicCIDRs": ["0.0.0.0/0"],
+    "EnabledLogs": ["api", "audit", "authenticator"],
+    "VersionStatus": "EXTENDED_SUPPORT",
+    "StandardSupportEnds": "2026-07-29T00:00:00Z"
+  },
+  "NodeGroups": [
+    {"Name": "general-purpose", "Zones": ["us-east-1a", "us-east-1b"]}
+  ],
+  "Volumes": [
+    {"ID": "vol-04e7a91c2b6d3f805", "Name": "postgres-data-old", "SizeGiB": 200, "Type": "gp3"},
+    {"ID": "vol-0b93d5f17a2c84e60", "SizeGiB": 50, "Type": "gp2"}
+  ],
+  "LoadBalancers": [
+    {"Name": "k8s-prod-web-4c1f9a7b2e", "Type": "network", "TargetGroups": 1, "RegisteredTargets": 2, "HealthyTargets": 2}
+  ],
+  "Databases": [
+    {"ID": "acme-orders", "Engine": "postgres", "RetentionDays": 7}
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "Region": "us-east-1",
+  "ClusterName": "prod",
+  "Cluster": {
+    "Name": "prod",
+    "Version": "1.30",
+    "VPCID": "vpc-0a1b2c3d",
+    "EndpointPublic": true,
+    "PublicCIDRs": ["0.0.0.0/0"],
+    "EnabledLogs": ["api"],
+    "VersionStatus": "EXTENDED_SUPPORT",
+    "StandardSupportEnds": "2025-07-23T00:00:00Z"
+  },
+  "NodeGroups": [
+    {"Name": "general", "Zones": ["us-east-1a"]},
+    {"Name": "spot", "Zones": ["us-east-1a", "us-east-1b"]}
+  ],
+  "Volumes": [
+    {"ID": "vol-0aaa111", "Name": "old-postgres-data", "SizeGiB": 200, "Type": "gp3"},
+    {"ID": "vol-0bbb222", "SizeGiB": 20, "Type": "gp2"}
+  ],
+  "LoadBalancers": [
+    {"Name": "k8s-shop-web-1a2b", "Type": "application", "TargetGroups": 1, "RegisteredTargets": 3, "HealthyTargets": 3},
+    {"Name": "k8s-old-demo-9f8e", "Type": "application", "TargetGroups": 0},
+    {"Name": "k8s-shop-grpc-7c6d", "Type": "network", "TargetGroups": 2, "RegisteredTargets": 0},
+    {"Name": "k8s-shop-admin-5e4f", "Type": "network", "TargetGroups": 1, "RegisteredTargets": 2, "HealthyTargets": 0}
+  ],
+  "Databases": [
+    {"ID": "analytics", "Engine": "aurora-postgresql", "Cluster": true, "RetentionDays": 1},
+    {"ID": "orders", "Engine": "postgres", "RetentionDays": 0},
+    {"ID": "sessions", "Engine": "mysql", "RetentionDays": 3},
+    {"ID": "users", "Engine": "postgres", "RetentionDays": 14}
+  ]
+}

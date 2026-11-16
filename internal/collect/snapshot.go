@@ -147,6 +147,11 @@ type Snapshot struct {
 	VeleroSchedules []VeleroSchedule
 	VolumeSnapshots []VolumeSnapshot
 
+	// AWS is the cloud side of the scan. It is nil unless --aws was given
+	// and AWS could be reached; AWSSkipReason then says why not.
+	AWS           *AWSSnapshot
+	AWSSkipReason string
+
 	// Errors holds the reason a resource type could not be listed, keyed by
 	// the Res* constants. A resource with an entry here has no data.
 	Errors map[string]error
@@ -189,7 +194,7 @@ func (s *Snapshot) Unavailable(resources ...string) string {
 
 func explain(err error) string {
 	switch {
-	case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
+	case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err), awsDenied(err):
 		return "the scanner's credentials do not have permission"
 	case apierrors.IsNotFound(err), meta.IsNoMatchError(err):
 		return "this API is not available on the cluster"

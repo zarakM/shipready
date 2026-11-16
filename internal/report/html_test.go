@@ -36,7 +36,7 @@ func render(t *testing.T, r Report, opts HTMLOptions) string {
 // is fixed, so the file is byte-for-byte reproducible.
 func sampleReport(t *testing.T) Report {
 	t.Helper()
-	r := buildFromFixtures(t, nil, "sample/cluster.yaml")
+	r := buildFromFixtures(t, nil, "sample/cluster.yaml", "sample/aws.json")
 	r.Cluster = "acme-prod-eks"
 	r.Tool.Version = "sample"
 	return r
@@ -47,10 +47,13 @@ func TestSampleReportIsCurrent(t *testing.T) {
 
 	// The sample is meant to show a mixed, believable result. Pin it so a
 	// change to a check that shifts it is noticed.
-	if r.Score.Overall == nil || *r.Score.Overall != 60 || r.Score.Grade != "C" {
-		t.Errorf("sample overall = %v %s, want 60 C", r.Score.Overall, r.Score.Grade)
+	if r.Score.Overall == nil || *r.Score.Overall != 61 || r.Score.Grade != "C" {
+		t.Errorf("sample overall = %v %s, want 61 C", r.Score.Overall, r.Score.Grade)
 	}
-	want := map[checks.Category]int{checks.Reliability: 60, checks.Security: 49, checks.Cost: 57, checks.Recovery: 75}
+	if r.Summary.Skipped != 0 {
+		t.Errorf("sample has %d skipped checks, want every check to run", r.Summary.Skipped)
+	}
+	want := map[checks.Category]int{checks.Reliability: 61, checks.Security: 45, checks.Cost: 56, checks.Recovery: 83}
 	for _, c := range r.Score.Categories {
 		if c.Score == nil || *c.Score != want[c.Category] {
 			t.Errorf("sample %s score = %v, want %d", c.Category, c.Score, want[c.Category])
@@ -90,7 +93,7 @@ func TestHTMLSections(t *testing.T) {
 		"Grade F",
 		// 2. Category cards
 		`href="#cat-reliability"`, `href="#cat-security"`, `href="#cat-cost"`, `href="#cat-recovery"`,
-		"1 passed · 2 failed · 0 not run",
+		"1 passed · 2 failed · 1 not run",
 		// 3. Top priorities
 		"Top priorities",
 		`<a class="check-id" href="#SEC-002">SEC-002</a>`,

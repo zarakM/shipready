@@ -7,8 +7,8 @@ import (
 	"github.com/zarakM/shipready/internal/collect"
 )
 
-// specChecks is the check table from docs/SPEC.md section 6, Kubernetes
-// checks only. The registry must match it exactly.
+// specChecks is the check table from docs/SPEC.md section 6. The registry
+// must match it exactly.
 var specChecks = map[string]struct {
 	category Category
 	severity Severity
@@ -22,6 +22,10 @@ var specChecks = map[string]struct {
 	"SEC-007": {Security, High}, "SEC-008": {Security, Low},
 	"COST-001": {Cost, Medium}, "COST-002": {Cost, Medium}, "COST-003": {Cost, Low}, "COST-004": {Cost, Medium},
 	"REC-001": {Recovery, Critical}, "REC-002": {Recovery, High}, "REC-003": {Recovery, High},
+	// The spec gives AWS checks a severity; their category is where each
+	// finding belongs in the report.
+	"AWS-001": {Security, High}, "AWS-002": {Security, Medium}, "AWS-003": {Cost, Low}, "AWS-004": {Cost, Low},
+	"AWS-005": {Recovery, Critical}, "AWS-006": {Reliability, Critical}, "AWS-007": {Reliability, High},
 }
 
 func TestDefaultRegistryMatchesSpec(t *testing.T) {
@@ -103,7 +107,7 @@ func TestRegistryOrdersByCategoryThenID(t *testing.T) {
 		got = append(got, c.ID())
 	}
 	joined := strings.Join(got, " ")
-	for _, want := range []string{"REL-001 REL-002", "REL-010 SEC-001", "SEC-008 COST-001", "COST-004 REC-001"} {
+	for _, want := range []string{"REL-001 REL-002", "REL-010 AWS-006 AWS-007 SEC-001", "SEC-008 AWS-001 AWS-002 COST-001", "COST-004 AWS-003 AWS-004 REC-001", "REC-003 AWS-005"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("order %q does not contain %q", joined, want)
 		}

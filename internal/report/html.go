@@ -53,6 +53,7 @@ type htmlData struct {
 	Version           string
 	ScanTime          string
 	Namespaces        string
+	AWSRegion         string
 	Summary           Summary
 	Total             int
 
@@ -168,6 +169,7 @@ func buildHTMLData(r Report, opts HTMLOptions) (htmlData, error) {
 		Version:           r.Tool.Version,
 		ScanTime:          r.ScanTime,
 		Namespaces:        strings.Join(r.Namespaces, ", "),
+		AWSRegion:         r.AWSRegion,
 		Summary:           r.Summary,
 		Total:             len(r.Checks),
 		GradeClass:        gradeClass(r.Score.Grade),

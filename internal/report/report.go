@@ -22,14 +22,16 @@ const TopPriorityCount = 5
 // Report is the stable JSON schema. Fields are only ever added within a
 // schema version, never renamed or removed.
 type Report struct {
-	SchemaVersion     string      `json:"schemaVersion"`
-	Tool              Tool        `json:"tool"`
-	Cluster           string      `json:"cluster"`
-	KubernetesVersion string      `json:"kubernetesVersion,omitempty"`
-	ScanTime          string      `json:"scanTime"` // RFC 3339, UTC
-	Namespaces        []string    `json:"namespaces,omitempty"`
-	Score             score.Score `json:"score"`
-	Summary           Summary     `json:"summary"`
+	SchemaVersion     string   `json:"schemaVersion"`
+	Tool              Tool     `json:"tool"`
+	Cluster           string   `json:"cluster"`
+	KubernetesVersion string   `json:"kubernetesVersion,omitempty"`
+	ScanTime          string   `json:"scanTime"` // RFC 3339, UTC
+	Namespaces        []string `json:"namespaces,omitempty"`
+	// AWSRegion is set when the scan included AWS checks.
+	AWSRegion string      `json:"awsRegion,omitempty"`
+	Score     score.Score `json:"score"`
+	Summary   Summary     `json:"summary"`
 	// TopPriorities holds the IDs of the most severe failed checks, worst
 	// first.
 	TopPriorities []string `json:"topPriorities"`
@@ -84,6 +86,9 @@ func Build(in Input) Report {
 		Score:             score.Compute(in.Outcomes),
 		TopPriorities:     []string{}, // always an array in JSON
 		Checks:            make([]Check, 0, len(in.Outcomes)),
+	}
+	if in.Snapshot.AWS != nil {
+		r.AWSRegion = in.Snapshot.AWS.Region
 	}
 	for _, o := range score.Top(in.Outcomes, TopPriorityCount) {
 		r.TopPriorities = append(r.TopPriorities, o.Check.ID())

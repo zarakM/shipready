@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -27,12 +28,29 @@ var (
 func fakeCluster(t *testing.T, fixtures ...string) connectFunc {
 	t.Helper()
 	objs := collecttest.Load(t, root, fixtures...)
-	return func(string) (collect.Clients, string, error) {
-		return collecttest.NewCluster(t, objs...).Clients(), "demo-cluster", nil
+	return func(string) (collect.Connection, error) {
+		return collect.Connection{
+			Clients:     collecttest.NewCluster(t, objs...).Clients(),
+			ClusterName: "demo-cluster",
+			EKS:         collect.EKSHint{Cluster: "prod", Region: "us-east-1"},
+		}, nil
+	}
+}
+
+// noAWS fails the test if the scan reaches for AWS without being asked to.
+func noAWS(t *testing.T) awsConnectFunc {
+	return func(context.Context, string, string) (collect.AWSClients, error) {
+		t.Error("AWS was contacted without --aws")
+		return collect.AWSClients{}, errors.New("unexpected")
 	}
 }
 
 func run(t *testing.T, connect connectFunc, args ...string) (string, error) {
+	t.Helper()
+	return runWith(t, connectors{cluster: connect, aws: noAWS(t)}, args...)
+}
+
+func runWith(t *testing.T, connect connectors, args ...string) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
 	cmd := newRootCmd(buildInfo{Version: "test", CTAURL: "https://example.com/book-a-call"}, connect)
@@ -128,8 +146,8 @@ func TestScanWritesJSONReport(t *testing.T) {
 			if rep.Cluster != "demo-cluster" || rep.Tool.Version != "test" || rep.ScanTime == "" {
 				t.Errorf("header = cluster %q, version %q, time %q", rep.Cluster, rep.Tool.Version, rep.ScanTime)
 			}
-			if len(rep.Checks) != 25 {
-				t.Fatalf("checks = %d, want 25", len(rep.Checks))
+			if len(rep.Checks) != 32 {
+				t.Fatalf("checks = %d, want 32", len(rep.Checks))
 			}
 			got := statuses(rep)
 			for id, want := range tc.want {
@@ -197,14 +215,16 @@ func TestScanRejectsBadInput(t *testing.T) {
 		{"unknown format", []string{"--format", "pdf"}, "unknown format"},
 		{"unknown skip value", []string{"--skip", "REL-999"}, "REL-999"},
 		{"unknown fail-on value", []string{"--fail-on", "medium"}, "critical or high"},
+		{"AWS region without --aws", []string{"--aws-region", "us-east-1"}, "together with --aws"},
+		{"EKS cluster without --aws", []string{"--eks-cluster", "prod"}, "together with --aws"},
 		{"positional argument", []string{"extra"}, "unknown command"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			connected := false
-			connect := func(string) (collect.Clients, string, error) {
+			connect := func(string) (collect.Connection, error) {
 				connected = true
-				return collecttest.NewCluster(t).Clients(), "demo", nil
+				return collect.Connection{Clients: collecttest.NewCluster(t).Clients(), ClusterName: "demo"}, nil
 			}
 			path := filepath.Join(t.TempDir(), "report.json")
 			_, err := run(t, connect, append([]string{"scan", "--output", path}, tc.args...)...)
@@ -222,8 +242,8 @@ func TestScanRejectsBadInput(t *testing.T) {
 }
 
 func TestScanReportsConnectionFailure(t *testing.T) {
-	connect := func(string) (collect.Clients, string, error) {
-		return collect.Clients{}, "", errors.New("kubeconfig context \"nope\" not found")
+	connect := func(string) (collect.Connection, error) {
+		return collect.Connection{}, errors.New("kubeconfig context \"nope\" not found")
 	}
 	if _, err := run(t, connect, "scan", "--context", "nope"); err == nil {
 		t.Fatal("expected an error")
@@ -257,13 +277,13 @@ func TestChecksAndVersionCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"REL-001", "REL-010", "SEC-001", "SEC-008", "COST-001", "COST-004", "REC-001", "REC-003"} {
+	for _, id := range []string{"REL-001", "REL-010", "SEC-001", "SEC-008", "COST-001", "COST-004", "REC-001", "REC-003", "AWS-001", "AWS-007"} {
 		if !strings.Contains(out, id) {
 			t.Errorf("checks output is missing %s:\n%s", id, out)
 		}
 	}
-	if lines := strings.Count(strings.TrimSpace(out), "\n"); lines != 25 {
-		t.Errorf("checks output has %d rows after the header, want 25", lines)
+	if lines := strings.Count(strings.TrimSpace(out), "\n"); lines != 32 {
+		t.Errorf("checks output has %d rows after the header, want 32", lines)
 	}
 
 	out, err = run(t, nil, "version")
@@ -342,8 +362,8 @@ func TestScanOutputFormats(t *testing.T) {
 			}
 			if tc.wantJSON != "" {
 				want++
-				if rep := readReport(t, tc.wantJSON); len(rep.Checks) != 25 {
-					t.Errorf("JSON report has %d checks, want 25", len(rep.Checks))
+				if rep := readReport(t, tc.wantJSON); len(rep.Checks) != 32 {
+					t.Errorf("JSON report has %d checks, want 32", len(rep.Checks))
 				}
 				if !strings.Contains(out, tc.wantJSON) {
 					t.Errorf("terminal output should name %s:\n%s", tc.wantJSON, out)
@@ -384,4 +404,138 @@ func TestScanWritesNothingOnFailure(t *testing.T) {
 			t.Errorf("unexpected file left behind: %s", e.Name())
 		}
 	}
+}
+
+func TestScanWithAWS(t *testing.T) {
+	awsIDs := []string{"AWS-001", "AWS-002", "AWS-003", "AWS-004", "AWS-005", "AWS-006", "AWS-007"}
+
+	t.Run("without --aws the AWS checks are listed as skipped", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "report.json")
+		out, err := run(t, fakeCluster(t, goodCluster...), "scan", "--output", path)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		rep := readReport(t, path)
+		for _, c := range rep.Checks {
+			if strings.HasPrefix(c.ID, "AWS-") && (c.Status != "skipped" || !strings.Contains(c.SkipReason, "--aws")) {
+				t.Errorf("%s = %s (%q), want skipped with a pointer to --aws", c.ID, c.Status, c.SkipReason)
+			}
+		}
+		if rep.AWSRegion != "" || strings.Contains(out, "AWS region") {
+			t.Error("no AWS region should be reported without --aws")
+		}
+	})
+
+	t.Run("--aws runs the AWS checks against the detected cluster", func(t *testing.T) {
+		account := collecttest.ProblemAccount()
+		var gotRegion, gotCluster string
+		connect := connectors{
+			cluster: fakeCluster(t, goodCluster...),
+			aws: func(_ context.Context, region, cluster string) (collect.AWSClients, error) {
+				gotRegion, gotCluster = region, cluster
+				return account.Clients(region, cluster), nil
+			},
+		}
+		path := filepath.Join(t.TempDir(), "report.json")
+		out, err := runWith(t, connect, "scan", "--aws", "--output", path)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		if gotRegion != "us-east-1" || gotCluster != "prod" {
+			t.Errorf("AWS connected with region %q cluster %q, want the values detected from the kubeconfig", gotRegion, gotCluster)
+		}
+		rep := readReport(t, path)
+		got := statuses(rep)
+		for _, id := range awsIDs {
+			if got[id] != "fail" {
+				t.Errorf("%s = %s, want fail", id, got[id])
+			}
+		}
+		if rep.AWSRegion != "us-east-1" || !strings.Contains(out, "AWS region: us-east-1") {
+			t.Errorf("the AWS region should be in the report (%q) and the summary:\n%s", rep.AWSRegion, out)
+		}
+		// Privacy: no account ID, ARN or VPC ID in the output.
+		data, _ := os.ReadFile(path)
+		for _, private := range []string{"arn:", collecttest.ClusterVPC, "123456789012"} {
+			if strings.Contains(string(data), private) || strings.Contains(out, private) {
+				t.Errorf("output contains %q", private)
+			}
+		}
+	})
+
+	t.Run("flags override what the kubeconfig says", func(t *testing.T) {
+		var gotRegion, gotCluster string
+		connect := connectors{
+			cluster: fakeCluster(t, goodCluster...),
+			aws: func(_ context.Context, region, cluster string) (collect.AWSClients, error) {
+				gotRegion, gotCluster = region, cluster
+				return collecttest.ProblemAccount().Clients(region, cluster), nil
+			},
+		}
+		path := filepath.Join(t.TempDir(), "report.json")
+		if out, err := runWith(t, connect, "scan", "--aws", "--aws-region", "eu-west-1", "--eks-cluster", "other", "--output", path); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		if gotRegion != "eu-west-1" || gotCluster != "other" {
+			t.Errorf("AWS connected with region %q cluster %q, want the flag values", gotRegion, gotCluster)
+		}
+		// "other" does not exist in the account: the EKS checks say so, and
+		// the region-wide volume check still runs.
+		got := statuses(readReport(t, path))
+		if got["AWS-001"] != "skipped" || got["AWS-003"] != "fail" {
+			t.Errorf("AWS-001 = %s, AWS-003 = %s; want skipped and fail", got["AWS-001"], got["AWS-003"])
+		}
+	})
+
+	t.Run("no AWS credentials: the scan still completes", func(t *testing.T) {
+		connect := connectors{
+			cluster: fakeCluster(t, badCluster...),
+			aws: func(context.Context, string, string) (collect.AWSClients, error) {
+				return collect.AWSClients{}, errors.New("no usable AWS credentials were found")
+			},
+		}
+		path := filepath.Join(t.TempDir(), "report.json")
+		out, err := runWith(t, connect, "scan", "--aws", "--output", path)
+		if err != nil {
+			t.Fatalf("a missing AWS login must not fail the scan: %v\n%s", err, out)
+		}
+		if !strings.Contains(out, "Warning: AWS checks skipped. No usable AWS credentials were found") {
+			t.Errorf("the terminal should warn about AWS:\n%s", out)
+		}
+		rep := readReport(t, path)
+		got := statuses(rep)
+		for _, c := range rep.Checks {
+			if strings.HasPrefix(c.ID, "AWS-") && (c.Status != "skipped" || !strings.Contains(c.SkipReason, "no usable AWS credentials")) {
+				t.Errorf("%s = %s (%q), want skipped with the credentials reason", c.ID, c.Status, c.SkipReason)
+			}
+		}
+		// The Kubernetes side is reported in full.
+		if got["SEC-002"] != "fail" || got["REL-008"] != "fail" || rep.Score.Overall == nil {
+			t.Error("Kubernetes findings should be unaffected by the AWS failure")
+		}
+	})
+
+	t.Run("one AWS permission missing skips only what needs it", func(t *testing.T) {
+		account := collecttest.ProblemAccount()
+		account.Fail = map[string]error{"DescribeDBInstances": collecttest.AccessDenied("rds:DescribeDBInstances")}
+		connect := connectors{
+			cluster: fakeCluster(t, goodCluster...),
+			aws: func(_ context.Context, region, cluster string) (collect.AWSClients, error) {
+				return account.Clients(region, cluster), nil
+			},
+		}
+		path := filepath.Join(t.TempDir(), "report.json")
+		if out, err := runWith(t, connect, "scan", "--aws", "--output", path); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		got := statuses(readReport(t, path))
+		if got["AWS-005"] != "skipped" {
+			t.Errorf("AWS-005 = %s, want skipped", got["AWS-005"])
+		}
+		for _, id := range []string{"AWS-001", "AWS-003", "AWS-004", "AWS-006"} {
+			if got[id] != "fail" {
+				t.Errorf("%s = %s, want fail", id, got[id])
+			}
+		}
+	})
 }

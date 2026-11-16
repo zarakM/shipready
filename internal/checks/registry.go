@@ -20,7 +20,7 @@ type Outcome struct {
 }
 
 // NewRegistry builds a registry, rejecting empty and duplicate IDs. Checks are
-// ordered by category, then ID.
+// ordered by category, with AWS checks after the Kubernetes ones, then by ID.
 func NewRegistry(cs ...Check) (*Registry, error) {
 	seen := map[string]bool{}
 	for _, c := range cs {
@@ -43,6 +43,11 @@ func NewRegistry(cs ...Check) (*Registry, error) {
 		if ci != cj {
 			return ci < cj
 		}
+		// Within a category the Kubernetes checks come first, then AWS.
+		ai, aj := strings.HasPrefix(sorted[i].ID(), "AWS-"), strings.HasPrefix(sorted[j].ID(), "AWS-")
+		if ai != aj {
+			return !ai
+		}
 		return sorted[i].ID() < sorted[j].ID()
 	})
 	return &Registry{checks: sorted}, nil
@@ -55,6 +60,7 @@ func Default() *Registry {
 		sec001, sec002, sec003, sec004, sec005, sec006, sec007, sec008,
 		cost001, cost002, cost003, cost004,
 		rec001, rec002, rec003,
+		aws001, aws002, aws003, aws004, aws005, aws006, aws007,
 	)
 	if err != nil {
 		panic(err) // a programming error caught by the registry test
