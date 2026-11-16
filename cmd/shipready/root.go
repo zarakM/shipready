@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"text/tabwriter"
 
@@ -10,9 +11,19 @@ import (
 	"github.com/zarakM/shipready/internal/collect"
 )
 
-// connectFunc builds cluster clients for a kubeconfig context and returns the
-// cluster's name. Tests replace it with a fake.
-type connectFunc func(kubeContext string) (collect.Clients, string, error)
+// connectFunc connects to the cluster a kubeconfig context points at. Tests
+// replace it with a fake.
+type connectFunc func(kubeContext string) (collect.Connection, error)
+
+// awsConnectFunc builds read-only AWS clients for a region and EKS cluster.
+// Tests replace it with a fake.
+type awsConnectFunc func(ctx context.Context, region, cluster string) (collect.AWSClients, error)
+
+// connectors are the ways out to the cluster and the cloud.
+type connectors struct {
+	cluster connectFunc
+	aws     awsConnectFunc
+}
 
 // buildInfo holds the values set at build time.
 type buildInfo struct {
@@ -22,7 +33,7 @@ type buildInfo struct {
 	CTAURL string
 }
 
-func newRootCmd(build buildInfo, connect connectFunc) *cobra.Command {
+func newRootCmd(build buildInfo, connect connectors) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "shipready",
 		Short: "Find production-readiness problems in your Kubernetes cluster",

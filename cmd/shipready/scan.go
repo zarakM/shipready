@@ -29,9 +29,12 @@ type scanOptions struct {
 	formats     []string
 	skip        []string
 	failOn      string
+	aws         bool
+	awsRegion   string
+	eksCluster  string
 }
 
-func newScanCmd(build buildInfo, connect connectFunc) *cobra.Command {
+func newScanCmd(build buildInfo, connect connectors) *cobra.Command {
 	var opts scanOptions
 	cmd := &cobra.Command{
 		Use:   "scan",
@@ -52,6 +55,9 @@ func newScanCmd(build buildInfo, connect connectFunc) *cobra.Command {
 	f.StringSliceVar(&opts.formats, "format", []string{formatHTML}, "report formats: html, json")
 	f.StringSliceVar(&opts.skip, "skip", nil, "check IDs or categories to skip")
 	f.StringVar(&opts.failOn, "fail-on", "", "exit with code 2 if a check of this severity or above fails: critical or high")
+	f.BoolVar(&opts.aws, "aws", false, "include AWS checks (uses the default AWS credential chain, read-only)")
+	f.StringVar(&opts.awsRegion, "aws-region", "", "AWS region of the cluster, with --aws (default: detected from the kubeconfig)")
+	f.StringVar(&opts.eksCluster, "eks-cluster", "", "EKS cluster name, with --aws (default: detected from the kubeconfig)")
 	return cmd
 }
 
@@ -119,7 +125,7 @@ func dedupe(values []string) []string {
 	return out
 }
 
-func runScan(cmd *cobra.Command, build buildInfo, connect connectFunc, opts scanOptions) error {
+func runScan(cmd *cobra.Command, build buildInfo, connect connectors, opts scanOptions) error {
 	registry := checks.Default()
 	formats, err := parseFormats(opts.formats)
 	if err != nil {
@@ -132,17 +138,23 @@ func runScan(cmd *cobra.Command, build buildInfo, connect connectFunc, opts scan
 	if err != nil {
 		return err
 	}
+	if !opts.aws && (opts.awsRegion != "" || opts.eksCluster != "") {
+		return errors.New("--aws-region and --eks-cluster only apply together with --aws")
+	}
 	namespaces := dedupe(opts.namespaces)
 
-	clients, clusterName, err := connect(opts.kubeContext)
+	conn, err := connect.cluster(opts.kubeContext)
 	if err != nil {
 		return err
 	}
-	snap, err := collect.Collect(cmd.Context(), clients, collect.Options{Namespaces: namespaces})
+	snap, err := collect.Collect(cmd.Context(), conn.Clients, collect.Options{Namespaces: namespaces})
 	if err != nil {
 		return err
 	}
-	snap.ClusterName = clusterName
+	snap.ClusterName = conn.ClusterName
+	if opts.aws {
+		collectAWS(cmd, connect.aws, conn.EKS, opts, snap)
+	}
 
 	rep := report.Build(report.Input{
 		ToolVersion: build.Version,
@@ -165,6 +177,34 @@ func runScan(cmd *cobra.Command, build buildInfo, connect connectFunc, opts scan
 		return &failOnError{severity: string(failOn)}
 	}
 	return nil
+}
+
+// collectAWS adds the AWS side of the scan to the snapshot. Trouble reaching
+// AWS never fails the scan: the AWS checks are reported as skipped with the
+// reason, and the Kubernetes results are still delivered in full.
+func collectAWS(cmd *cobra.Command, connect awsConnectFunc, hint collect.EKSHint, opts scanOptions, snap *collect.Snapshot) {
+	region, cluster := hint.Region, hint.Cluster
+	if opts.awsRegion != "" {
+		region = opts.awsRegion
+	}
+	if opts.eksCluster != "" {
+		cluster = opts.eksCluster
+	}
+	clients, err := connect(cmd.Context(), region, cluster)
+	if err != nil {
+		snap.AWSSkipReason = "AWS could not be reached: " + err.Error()
+		// A warning that cannot be printed is no reason to stop the scan.
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: AWS checks skipped. %s\n\n", upperFirst(err.Error()))
+		return
+	}
+	snap.AWS = collect.CollectAWS(cmd.Context(), clients)
+}
+
+func upperFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // writeReports renders every requested format before writing any of them, and

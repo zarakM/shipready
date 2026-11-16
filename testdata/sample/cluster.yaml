@@ -1,7 +1,8 @@
 # A believable Series A cluster with a mix of good and bad practice. It is the
 # source of docs/sample-report.html. Clock fixed at 2026-11-16T12:00:00Z.
 #
-# Expected: Reliability 60, Security 49, Cost 57, Recovery 75, overall 60 (C).
+# Together with aws.json, the AWS side of the same scan, the expected result
+# is: Reliability 61, Security 45, Cost 56, Recovery 83, overall 61 (C).
 apiVersion: v1
 kind: Node
 metadata:

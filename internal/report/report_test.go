@@ -24,6 +24,15 @@ func buildFromFixtures(t *testing.T, skip []string, fixtures ...string) Report {
 		}
 		s := collect.NewSnapshot()
 		for _, path := range all {
+			// A JSON fixture is the AWS side of the scan.
+			if strings.HasSuffix(path, ".json") {
+				a, err := collect.LoadAWSFixture(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.AWS = a
+				continue
+			}
 			objs, err := collect.LoadManifests(path)
 			if err != nil {
 				t.Fatal(err)
@@ -105,8 +114,8 @@ func TestJSONSchema(t *testing.T) {
 	}
 
 	list := doc["checks"].([]any)
-	if len(list) != 25 {
-		t.Fatalf("checks = %d, want 25", len(list))
+	if len(list) != 32 {
+		t.Fatalf("checks = %d, want 32", len(list))
 	}
 	counts := map[string]float64{}
 	for _, item := range list {
@@ -136,8 +145,8 @@ func TestJSONSchema(t *testing.T) {
 	if summary["passed"] != counts["pass"] || summary["failed"] != counts["fail"] || summary["skipped"] != counts["skipped"] {
 		t.Errorf("summary %v does not match the checks: %v", summary, counts)
 	}
-	if counts["skipped"] != 1 {
-		t.Errorf("skipped = %v, want only the one named with --skip", counts["skipped"])
+	if counts["skipped"] != 8 {
+		t.Errorf("skipped = %v, want the one named with --skip plus the seven AWS checks", counts["skipped"])
 	}
 
 	first := list[0].(map[string]any)
@@ -243,7 +252,7 @@ func TestWriteSummary(t *testing.T) {
 		"2. [CRITICAL] REL-008 All nodes in a single availability zone (2 resources affected)",
 		"Fix: Spread node groups across at least two availability zones",
 		"more in the report",
-		"1 check was not run",
+		"8 checks were not run",
 		"Full report: ./shipready-report.json",
 	} {
 		if !strings.Contains(out, want) {

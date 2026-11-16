@@ -29,6 +29,8 @@ shipready scan [flags]
   --context string       kubeconfig context (default: current)
   --namespace strings    limit to namespaces (default: all non-system)
   --aws                  include AWS checks (uses the default AWS credential chain)
+  --aws-region string    AWS region of the cluster, with --aws (default: detected)
+  --eks-cluster string   EKS cluster name, with --aws (default: detected)
   --output string        report path (default: ./shipready-report.html)
   --format strings       html, json (default: html)
   --skip strings         check IDs or categories to skip
@@ -37,8 +39,6 @@ shipready version
 ```
 
 Exit code is 0 when the scan completes, regardless of findings. Add `--fail-on critical|high` for CI use: the report and summary are still written, and the exit code is 2 when any check of that severity or above failed. Exit code 1 means the scan itself could not run.
-
-`--aws` is not registered until milestone 4.
 
 Output rules (decided in milestone 3):
 
@@ -153,6 +153,35 @@ Scope rules for the recovery checks (decided in milestone 2):
 | AWS-006 | Node groups in a single AZ | critical |
 | AWS-007 | EKS version out of standard support | high |
 
+Rules for the AWS checks (decided in milestone 4):
+
+- **Categories and scoring:** AWS checks count in the four existing categories, so `--aws` changes the score. AWS-001 and AWS-002 are Security, AWS-003 and AWS-004 are Cost, AWS-005 is Recovery, AWS-006 and AWS-007 are Reliability. In each category they are listed after the Kubernetes checks.
+- **Without `--aws`:** the seven checks are still listed, as skipped, with the reason "run with `--aws`", so the report is honest about what it did not cover.
+- **AWS unreachable:** missing or expired credentials, or an unknown region, never fail the scan. The AWS checks are skipped with the reason, a warning is printed, and the Kubernetes results are reported in full. A single missing permission skips only the checks that need it.
+- **Which cluster:** the EKS cluster name and region are worked out from the kubeconfig context: the ARN written by `aws eks update-kubeconfig`, the `eksctl` name, the arguments of the token command, or the API server address. `--eks-cluster` and `--aws-region` override them. If the cluster cannot be identified, the checks that need it are skipped.
+- **How much of the account:** load balancers and databases are limited to the cluster's VPC, so resources of other systems in the account are not reported. Unattached EBS volumes are checked across the cluster's region.
+- **Privacy:** the report shows resource names and IDs and the region. It never contains the account ID, ARNs, the VPC ID or anything from the credentials.
+- **AWS-001:** the public endpoint is enabled and its allowed ranges include `0.0.0.0/0` (an empty list means the same).
+- **AWS-002:** fails unless the `api`, `audit` and `authenticator` log types are all on; the finding lists the ones that are off.
+- **AWS-003:** EBS volumes in the `available` state.
+- **AWS-004:** an Application or Network Load Balancer with no target groups, no registered targets, or no healthy target. Classic and Gateway load balancers are not covered.
+- **AWS-005:** an RDS instance or DB cluster with backup retention under 7 days. Read replicas are exempt. Instances that belong to a cluster (Aurora) are judged through the cluster.
+- **AWS-006:** a managed node group whose subnets are all in one availability zone. Skipped when the cluster has no managed node groups. It can fail alongside REL-008 on a single-zone cluster; they are kept as two findings because they measure different things.
+- **AWS-007:** support status and dates are read live from the EKS `DescribeClusterVersions` API, so no date table in the binary can go stale. Fails when the version is in extended support, unsupported, or past its end-of-standard-support date.
+- **AWS Backup** is not detected, so REC-001 can still fail on a cluster that is backed up from outside. Out of scope for v1.
+
+The scanner makes only these AWS calls, which is the full list for the IAM policy in milestone 5:
+
+```
+eks:DescribeCluster        eks:DescribeClusterVersions
+eks:ListNodegroups         eks:DescribeNodegroup
+ec2:DescribeSubnets        ec2:DescribeVolumes
+elasticloadbalancing:DescribeLoadBalancers
+elasticloadbalancing:DescribeTargetGroups
+elasticloadbalancing:DescribeTargetHealth
+rds:DescribeDBInstances    rds:DescribeDBClusters
+```
+
 ## 7. Scoring
 
 - Severity weights: critical 10, high 5, medium 2, low 1.
@@ -199,6 +228,8 @@ collect  ->  checks  ->  score  ->  report
 - **report:** renderers for terminal summary, HTML and JSON.
 
 System namespaces (`kube-system`, `kube-public`, `kube-node-lease`) are excluded from workload checks by default. The `Snapshot` still holds their objects on a whole-cluster scan, so that checks can detect tools installed there (an autoscaler, for example) and count every pod on a node. Naming a system namespace with `--namespace` puts it in scope.
+
+With `--aws`, a second collector fills the AWS part of the `Snapshot` the same way: once, read-only, with a resource that cannot be read recorded instead of failing the scan. Each AWS client is a narrow interface holding only the calls listed in section 6, and a test fails if any of them is not a `Describe`, `List` or `Get`. AWS SDK modules in use: `config`, `service/eks`, `service/ec2`, `service/elasticloadbalancingv2` and `service/rds`.
 
 The collector never lists Secrets. Optional add-on APIs (metrics-server, cert-manager, Velero, VolumeSnapshots) are read through the dynamic client, and only when API discovery shows they are installed.
 

@@ -41,7 +41,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	err := newRootCmd(buildInfo{Version: version, CTAURL: CTAURL}, collect.Connect).ExecuteContext(ctx)
+	err := newRootCmd(
+		buildInfo{Version: version, CTAURL: CTAURL},
+		connectors{cluster: collect.Connect, aws: collect.ConnectAWS},
+	).ExecuteContext(ctx)
 	if err == nil {
 		return
 	}

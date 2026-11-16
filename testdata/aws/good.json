@@ -1,0 +1,25 @@
+{
+  "Region": "eu-west-1",
+  "ClusterName": "prod",
+  "Cluster": {
+    "Name": "prod",
+    "Version": "1.34",
+    "VPCID": "vpc-0a1b2c3d",
+    "EndpointPublic": true,
+    "PublicCIDRs": ["203.0.113.0/24"],
+    "EnabledLogs": ["api", "audit", "authenticator", "scheduler"],
+    "VersionStatus": "STANDARD_SUPPORT",
+    "StandardSupportEnds": "2027-10-30T00:00:00Z"
+  },
+  "NodeGroups": [
+    {"Name": "general", "Zones": ["eu-west-1a", "eu-west-1b", "eu-west-1c"]}
+  ],
+  "Volumes": [],
+  "LoadBalancers": [
+    {"Name": "k8s-shop-web-1a2b", "Type": "application", "TargetGroups": 2, "RegisteredTargets": 6, "HealthyTargets": 5}
+  ],
+  "Databases": [
+    {"ID": "orders", "Engine": "postgres", "RetentionDays": 7},
+    {"ID": "analytics", "Engine": "aurora-postgresql", "Cluster": true, "RetentionDays": 35}
+  ]
+}

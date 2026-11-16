@@ -20,6 +20,7 @@
       {{- if .KubernetesVersion}}<div><dt>Kubernetes</dt><dd>{{.KubernetesVersion}}</dd></div>{{end}}
       <div><dt>ShipReady</dt><dd>{{.Version}}</dd></div>
       <div><dt>Scope</dt><dd>{{if .Namespaces}}{{.Namespaces}}{{else}}Whole cluster{{end}}</dd></div>
+      {{- if .AWSRegion}}<div><dt>AWS</dt><dd>{{.AWSRegion}}</dd></div>{{end}}
     </dl>
     <p class="tally">
       <span class="tally-fail">{{.Summary.Failed}} failed</span>

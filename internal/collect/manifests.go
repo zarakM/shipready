@@ -3,6 +3,7 @@ package collect
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -126,4 +127,21 @@ func SnapshotFromObjects(objs []runtime.Object) (*Snapshot, error) {
 		}
 	}
 	return s, nil
+}
+
+// LoadAWSFixture reads an AWSSnapshot from a JSON file, for building AWS test
+// data with no account involved.
+func LoadAWSFixture(path string) (*AWSSnapshot, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	a := &AWSSnapshot{}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(a); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	a.Errors = map[string]error{}
+	return a, nil
 }

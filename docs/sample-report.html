@@ -250,22 +250,22 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
     <dl class="meta">
       <div><dt>Scanned</dt><dd>16 Nov 2026, 04:30 UTC</dd></div><div><dt>Kubernetes</dt><dd>v1.33.0</dd></div>
       <div><dt>ShipReady</dt><dd>sample</dd></div>
-      <div><dt>Scope</dt><dd>Whole cluster</dd></div>
+      <div><dt>Scope</dt><dd>Whole cluster</dd></div><div><dt>AWS</dt><dd>us-east-1</dd></div>
     </dl>
     <p class="tally">
-      <span class="tally-fail">13 failed</span>
-      <span class="tally-pass">12 passed</span>
+      <span class="tally-fail">16 failed</span>
+      <span class="tally-pass">16 passed</span>
       <span class="tally-skip">0 not run</span>
-      <span class="tally-total">of 25 checks</span>
+      <span class="tally-total">of 32 checks</span>
     </p>
   </div>
-  <div class="score grade-c" role="img" aria-label="Overall score 60 out of 100, grade C">
+  <div class="score grade-c" role="img" aria-label="Overall score 61 out of 100, grade C">
     <svg viewBox="0 0 120 120" aria-hidden="true">
       <circle class="ring-track" cx="60" cy="60" r="52"/>
-      <circle class="ring-value" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="130.7"/>
+      <circle class="ring-value" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="127.4"/>
     </svg>
     <div class="score-text">
-      <span class="score-number">60</span>
+      <span class="score-number">61</span>
       <span class="score-grade">Grade C</span>
     </div>
   </div>
@@ -274,27 +274,27 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
 <section class="cards" aria-label="Scores by category">
   <a class="card grade-c" href="#cat-reliability">
     <h2>Reliability</h2>
-    <p class="card-score"><span class="card-number">60</span><span class="card-grade">C</span></p>
-    <div class="bar"><span style="width: 60%"></span></div>
-    <p class="card-counts">4 passed · 6 failed · 0 not run</p>
+    <p class="card-score"><span class="card-number">61</span><span class="card-grade">C</span></p>
+    <div class="bar"><span style="width: 61%"></span></div>
+    <p class="card-counts">5 passed · 7 failed · 0 not run</p>
   </a>
   <a class="card grade-d" href="#cat-security">
     <h2>Security</h2>
-    <p class="card-score"><span class="card-number">49</span><span class="card-grade">D</span></p>
-    <div class="bar"><span style="width: 49%"></span></div>
-    <p class="card-counts">4 passed · 4 failed · 0 not run</p>
+    <p class="card-score"><span class="card-number">45</span><span class="card-grade">D</span></p>
+    <div class="bar"><span style="width: 45%"></span></div>
+    <p class="card-counts">5 passed · 5 failed · 0 not run</p>
   </a>
   <a class="card grade-d" href="#cat-cost">
     <h2>Cost</h2>
-    <p class="card-score"><span class="card-number">57</span><span class="card-grade">D</span></p>
-    <div class="bar"><span style="width: 57%"></span></div>
-    <p class="card-counts">2 passed · 2 failed · 0 not run</p>
+    <p class="card-score"><span class="card-number">56</span><span class="card-grade">D</span></p>
+    <div class="bar"><span style="width: 56%"></span></div>
+    <p class="card-counts">3 passed · 3 failed · 0 not run</p>
   </a>
   <a class="card grade-b" href="#cat-recovery">
     <h2>Recovery</h2>
-    <p class="card-score"><span class="card-number">75</span><span class="card-grade">B</span></p>
-    <div class="bar"><span style="width: 75%"></span></div>
-    <p class="card-counts">2 passed · 1 failed · 0 not run</p>
+    <p class="card-score"><span class="card-number">83</span><span class="card-grade">B</span></p>
+    <div class="bar"><span style="width: 83%"></span></div>
+    <p class="card-counts">3 passed · 1 failed · 0 not run</p>
   </a>
 </section>
 
@@ -323,29 +323,29 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
     <li class="sev-high">
       <div class="priority-head">
         <span class="badge">High</span>
+        <a class="check-id" href="#AWS-001">AWS-001</a>
+        <span class="priority-title">EKS API endpoint public with no CIDR restriction</span>
+        <span class="count">1 resource affected</span>
+      </div>
+      <p class="fix"><strong>Fix:</strong> Restrict the public endpoint to your office and VPN address ranges, or turn it off and reach the API through the private endpoint.</p>
+    </li>
+    <li class="sev-high">
+      <div class="priority-head">
+        <span class="badge">High</span>
+        <a class="check-id" href="#AWS-007">AWS-007</a>
+        <span class="priority-title">EKS version out of standard support</span>
+        <span class="count">1 resource affected</span>
+      </div>
+      <p class="fix"><strong>Fix:</strong> Plan an upgrade to a version in standard support. Upgrade one minor version at a time, and check for removed APIs before each step.</p>
+    </li>
+    <li class="sev-high">
+      <div class="priority-head">
+        <span class="badge">High</span>
         <a class="check-id" href="#REC-003">REC-003</a>
         <span class="priority-title">StatefulSets with no VolumeSnapshot or backup schedule covering them</span>
         <span class="count">1 resource affected</span>
       </div>
       <p class="fix"><strong>Fix:</strong> Include the namespace in a Velero schedule with volume backups, or take scheduled VolumeSnapshots of each data volume.</p>
-    </li>
-    <li class="sev-high">
-      <div class="priority-head">
-        <span class="badge">High</span>
-        <a class="check-id" href="#REL-002">REL-002</a>
-        <span class="priority-title">Containers without memory limits</span>
-        <span class="count">1 resource affected</span>
-      </div>
-      <p class="fix"><strong>Fix:</strong> Set a memory limit on every container. Start at roughly 1.5 to 2 times the memory request and adjust from real usage.</p>
-    </li>
-    <li class="sev-high">
-      <div class="priority-head">
-        <span class="badge">High</span>
-        <a class="check-id" href="#SEC-004">SEC-004</a>
-        <span class="priority-title">Secrets passed as plain environment variable values</span>
-        <span class="count">1 resource affected</span>
-      </div>
-      <p class="fix"><strong>Fix:</strong> Move the value into a Secret (or an external secret manager) and reference it. Then rotate the credential, since the old value has already been exposed.</p>
     </li>
   </ol>
 </section>
@@ -366,6 +366,45 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
   </div>
   <div class="category" id="cat-reliability">
     <h3>Reliability <span class="category-note">Will it stay up?</span></h3>
+    <details class="finding sev-high" id="AWS-007" data-severity="high">
+      <summary>
+        <span class="badge">High</span>
+        <span class="check-id">AWS-007</span>
+        <span class="finding-title">EKS version out of standard support</span>
+        <span class="count">1 resource affected</span>
+      </summary>
+      <div class="finding-body">
+        <div class="explain">
+          <div>
+            <h4>Why it matters</h4>
+            <p>This Kubernetes version has left standard support. AWS charges several times more per hour to keep running it in extended support, and when that ends too the cluster is upgraded automatically at a time you do not choose.</p>
+          </div>
+          <div>
+            <h4>How to fix it</h4>
+            <p>Plan an upgrade to a version in standard support. Upgrade one minor version at a time, and check for removed APIs before each step.</p>
+          </div>
+        </div>
+        <h4>Affected resources (1)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Name</th>
+                <th>What is wrong</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>EKS cluster</td>
+                <td class="mono">acme-prod-eks</td>
+                <td>runs Kubernetes 1.33; standard support ended on 29 Jul 2026</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
     <details class="finding sev-high" id="REL-002" data-severity="high">
       <summary>
         <span class="badge">High</span>
@@ -676,12 +715,13 @@ spec:
     </details>
     <p class="no-match" hidden>No findings of this severity in Reliability.</p>
     <details class="passed">
-      <summary>4 passed: these problems were looked for and not found</summary>
+      <summary>5 passed: these problems were looked for and not found</summary>
       <ul>
         <li><span class="check-id">REL-001</span> Containers without CPU/memory requests</li>
         <li><span class="check-id">REL-003</span> Deployments/StatefulSets without readiness probes</li>
         <li><span class="check-id">REL-008</span> All nodes in a single availability zone</li>
         <li><span class="check-id">REL-009</span> TLS certificates expiring within 30 days</li>
+        <li><span class="check-id">AWS-006</span> Node groups in a single AZ</li>
       </ul>
     </details>
   </div>
@@ -720,6 +760,50 @@ spec:
                 <td>ClusterRoleBinding</td>
                 <td class="mono">ci-deployer-admin</td>
                 <td>grants cluster-admin to ServiceAccount prod/ci-deployer</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+    <details class="finding sev-high" id="AWS-001" data-severity="high">
+      <summary>
+        <span class="badge">High</span>
+        <span class="check-id">AWS-001</span>
+        <span class="finding-title">EKS API endpoint public with no CIDR restriction</span>
+        <span class="count">1 resource affected</span>
+      </summary>
+      <div class="finding-body">
+        <div class="explain">
+          <div>
+            <h4>Why it matters</h4>
+            <p>Anyone on the internet can reach your cluster&#39;s API server. Authentication still stands in the way, but one leaked credential or one Kubernetes vulnerability is then enough, with no network barrier at all.</p>
+          </div>
+          <div>
+            <h4>How to fix it</h4>
+            <p>Restrict the public endpoint to your office and VPN address ranges, or turn it off and reach the API through the private endpoint.</p>
+            <div class="snippet">
+              <button type="button" class="copy" data-action="copy">Copy</button>
+              <pre><code>aws eks update-cluster-config --name &lt;cluster&gt; \
+  --resources-vpc-config endpointPublicAccess=true,publicAccessCidrs=203.0.113.0/24,endpointPrivateAccess=true</code></pre>
+            </div>
+          </div>
+        </div>
+        <h4>Affected resources (1)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Name</th>
+                <th>What is wrong</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>EKS cluster</td>
+                <td class="mono">acme-prod-eks</td>
+                <td>API endpoint accepts connections from any IP address</td>
               </tr>
             </tbody>
           </table>
@@ -875,12 +959,13 @@ spec:
     </details>
     <p class="no-match" hidden>No findings of this severity in Security.</p>
     <details class="passed">
-      <summary>4 passed: these problems were looked for and not found</summary>
+      <summary>5 passed: these problems were looked for and not found</summary>
       <ul>
         <li><span class="check-id">SEC-001</span> Containers running as root or privileged</li>
         <li><span class="check-id">SEC-003</span> Roles with wildcard verbs or resources</li>
         <li><span class="check-id">SEC-006</span> Services of type LoadBalancer or NodePort exposed publicly</li>
         <li><span class="check-id">SEC-007</span> Pods using hostNetwork, hostPID or hostPath</li>
+        <li><span class="check-id">AWS-002</span> EKS control plane logging disabled</li>
       </ul>
     </details>
   </div>
@@ -919,6 +1004,50 @@ spec:
                 <td>Node</td>
                 <td class="mono">ip-10-0-2-90.ec2.internal</td>
                 <td>0% of CPU and 0% of memory requested</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+    <details class="finding sev-low" id="AWS-003" data-severity="low">
+      <summary>
+        <span class="badge">Low</span>
+        <span class="check-id">AWS-003</span>
+        <span class="finding-title">Unattached EBS volumes</span>
+        <span class="count">2 resources affected</span>
+      </summary>
+      <div class="finding-body">
+        <div class="explain">
+          <div>
+            <h4>Why it matters</h4>
+            <p>These disks are attached to nothing and are billed every month all the same. They are usually left behind when an instance or a Kubernetes volume is deleted.</p>
+          </div>
+          <div>
+            <h4>How to fix it</h4>
+            <p>Check whether the data is still needed. Snapshot anything worth keeping, which costs far less than the volume, then delete the volume.</p>
+          </div>
+        </div>
+        <h4>Affected resources (2)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Name</th>
+                <th>What is wrong</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>EBS volume</td>
+                <td class="mono">vol-04e7a91c2b6d3f805</td>
+                <td>200 GiB gp3, attached to nothing (named &#34;postgres-data-old&#34;)</td>
+              </tr>
+              <tr>
+                <td>EBS volume</td>
+                <td class="mono">vol-0b93d5f17a2c84e60</td>
+                <td>50 GiB gp2, attached to nothing</td>
               </tr>
             </tbody>
           </table>
@@ -966,10 +1095,11 @@ spec:
     </details>
     <p class="no-match" hidden>No findings of this severity in Cost.</p>
     <details class="passed">
-      <summary>2 passed: these problems were looked for and not found</summary>
+      <summary>3 passed: these problems were looked for and not found</summary>
       <ul>
         <li><span class="check-id">COST-001</span> Requests far above actual usage</li>
         <li><span class="check-id">COST-004</span> No cluster autoscaler or Karpenter detected</li>
+        <li><span class="check-id">AWS-004</span> Load balancers with no healthy targets</li>
       </ul>
     </details>
   </div>
@@ -1029,10 +1159,11 @@ spec:
     </details>
     <p class="no-match" hidden>No findings of this severity in Recovery.</p>
     <details class="passed">
-      <summary>2 passed: these problems were looked for and not found</summary>
+      <summary>3 passed: these problems were looked for and not found</summary>
       <ul>
         <li><span class="check-id">REC-001</span> No backup tool detected (Velero or equivalent)</li>
         <li><span class="check-id">REC-002</span> Velero installed but no successful backup in the last 7 days</li>
+        <li><span class="check-id">AWS-005</span> RDS instances without automated backups or with retention under 7 days</li>
       </ul>
     </details>
   </div>

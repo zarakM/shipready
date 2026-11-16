@@ -30,6 +30,9 @@ func WriteSummary(out io.Writer, r Report, reportPaths ...string) error {
 	if len(r.Namespaces) > 0 {
 		fmt.Fprintf(&b, "Namespaces: %s\n", strings.Join(r.Namespaces, ", "))
 	}
+	if r.AWSRegion != "" {
+		fmt.Fprintf(&b, "AWS region: %s\n", r.AWSRegion)
+	}
 	b.WriteString("\n")
 
 	if r.Score.Overall != nil {
