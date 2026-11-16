@@ -35,7 +35,7 @@ func fakeCluster(t *testing.T, fixtures ...string) connectFunc {
 func run(t *testing.T, connect connectFunc, args ...string) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
-	cmd := newRootCmd("test", connect)
+	cmd := newRootCmd(buildInfo{Version: "test", CTAURL: "https://example.com/book-a-call"}, connect)
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs(args)
@@ -193,7 +193,7 @@ func TestScanRejectsBadInput(t *testing.T) {
 		args    []string
 		wantErr string
 	}{
-		{"html not available yet", []string{"--format", "html"}, "not available yet"},
+		{"empty format", []string{"--format", " "}, "at least one value"},
 		{"unknown format", []string{"--format", "pdf"}, "unknown format"},
 		{"unknown skip value", []string{"--skip", "REL-999"}, "REL-999"},
 		{"unknown fail-on value", []string{"--fail-on", "medium"}, "critical or high"},
@@ -272,5 +272,116 @@ func TestChecksAndVersionCommands(t *testing.T) {
 	}
 	if strings.TrimSpace(out) != "shipready test" {
 		t.Errorf("version output = %q", out)
+	}
+}
+
+func TestScanOutputFormats(t *testing.T) {
+	cases := []struct {
+		name     string
+		output   string   // --output, relative to the temp dir; "" leaves the flag off
+		args     []string // extra flags
+		wantHTML string   // file expected to hold the HTML report, "" for none
+		wantJSON string
+	}{
+		{name: "html is the default", output: "", wantHTML: "shipready-report.html"},
+		{name: "html to a chosen path", output: "out/cluster.html", wantHTML: "out/cluster.html"},
+		{name: "a .json output path means json", output: "r.json", wantJSON: "r.json"},
+		{name: "explicit format wins over the extension", output: "r.json", args: []string{"--format", "html"}, wantHTML: "r.json"},
+		{name: "json only", output: "r.txt", args: []string{"--format", "json"}, wantJSON: "r.txt"},
+		{name: "both formats share the name", output: "cluster.html", args: []string{"--format", "html,json"}, wantHTML: "cluster.html", wantJSON: "cluster.json"},
+		{name: "both formats, no extension given", output: "cluster", args: []string{"--format", "json", "--format", "HTML"}, wantHTML: "cluster.html", wantJSON: "cluster.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Fixtures are loaded relative to the package, so before moving.
+			connect := fakeCluster(t, badCluster...)
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "out"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(dir)
+
+			args := []string{"scan"}
+			if tc.output != "" {
+				args = append(args, "--output", tc.output)
+			}
+			out, err := run(t, connect, append(args, tc.args...)...)
+			if err != nil {
+				t.Fatalf("scan failed: %v\n%s", err, out)
+			}
+
+			var files []string
+			err = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+				if err == nil && !d.IsDir() {
+					files = append(files, filepath.ToSlash(path))
+				}
+				return err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if tc.wantHTML != "" {
+				want++
+				data, err := os.ReadFile(tc.wantHTML)
+				if err != nil {
+					t.Fatalf("HTML report missing: %v (files: %v)", err, files)
+				}
+				html := string(data)
+				if !strings.HasPrefix(html, "<!doctype html>") || !strings.HasSuffix(strings.TrimSpace(html), "</html>") {
+					t.Error("HTML report is not a complete document")
+				}
+				for _, part := range []string{"demo-cluster", "Top priorities", "SEC-002", `href="https://example.com/book-a-call"`} {
+					if !strings.Contains(html, part) {
+						t.Errorf("HTML report is missing %q", part)
+					}
+				}
+				if !strings.Contains(out, tc.wantHTML) {
+					t.Errorf("terminal output should name %s:\n%s", tc.wantHTML, out)
+				}
+			}
+			if tc.wantJSON != "" {
+				want++
+				if rep := readReport(t, tc.wantJSON); len(rep.Checks) != 25 {
+					t.Errorf("JSON report has %d checks, want 25", len(rep.Checks))
+				}
+				if !strings.Contains(out, tc.wantJSON) {
+					t.Errorf("terminal output should name %s:\n%s", tc.wantJSON, out)
+				}
+			}
+			// Only the reports: no temporary files left behind.
+			if len(files) != want {
+				t.Errorf("files written = %v, want exactly %d report(s)", files, want)
+			}
+		})
+	}
+}
+
+// A report that cannot be written must not leave a partial file, and must not
+// leave one format behind without the other.
+func TestScanWritesNothingOnFailure(t *testing.T) {
+	connect := fakeCluster(t, goodCluster...)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	// "blocked.json" is a directory, so the JSON report cannot be renamed
+	// into place. The HTML report is rendered first but must not survive.
+	if err := os.Mkdir("blocked.json", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("blocked.json", "keep"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := run(t, connect, "scan", "--output", "blocked", "--format", "html,json")
+	if err == nil {
+		t.Fatal("expected an error when a report cannot be written")
+	}
+	entries, readErr := os.ReadDir(".")
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	for _, e := range entries {
+		if e.Name() != "blocked.json" {
+			t.Errorf("unexpected file left behind: %s", e.Name())
+		}
 	}
 }

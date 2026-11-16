@@ -1,8 +1,9 @@
-// Package report turns check outcomes into output: the JSON report and the
-// terminal summary. The HTML report follows in milestone 3.
+// Package report turns check outcomes into output: the HTML report, the JSON
+// report and the terminal summary.
 package report
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"time"
@@ -127,10 +128,24 @@ func (r Report) Failed(atLeast checks.Severity) bool {
 	return false
 }
 
-// WriteJSON writes the report as indented JSON.
-func WriteJSON(w io.Writer, r Report) error {
-	enc := json.NewEncoder(w)
+// RenderJSON returns the report as indented JSON.
+func RenderJSON(r Report) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
-	return enc.Encode(r)
+	if err := enc.Encode(r); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// WriteJSON writes the report as indented JSON.
+func WriteJSON(w io.Writer, r Report) error {
+	out, err := RenderJSON(r)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(out)
+	return err
 }

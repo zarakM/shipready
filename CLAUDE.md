@@ -39,6 +39,7 @@ go build ./cmd/shipready
 go test ./...
 go vet ./...
 golangci-lint run
+go test ./internal/report -run TestSampleReportIsCurrent -update   # regenerate docs/sample-report.html
 ```
 
 ## Conventions
