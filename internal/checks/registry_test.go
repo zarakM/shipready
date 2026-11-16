@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 func TestDefaultRegistryMetadata(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 var rel005 = check{

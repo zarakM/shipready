@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/checks"
+	"github.com/zarakM/shipready/internal/checks"
 )
 
 // connectFunc builds a cluster client for a kubeconfig context and returns

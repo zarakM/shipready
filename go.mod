@@ -1,4 +1,4 @@
-module github.com/muhammadzarakbinkaleem/shipready
+module github.com/zarakM/shipready
 
 go 1.26.1
 

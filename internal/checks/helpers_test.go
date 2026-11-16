@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 // fixture loads testdata/<name> into a snapshot.

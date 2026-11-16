@@ -8,7 +8,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 func TestREL001Requests(t *testing.T) {

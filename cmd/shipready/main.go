@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

@@ -5,7 +5,7 @@ package checks
 import (
 	"sort"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 // Severity of a check.

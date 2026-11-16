@@ -3,7 +3,7 @@ package checks
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 var rel004 = check{

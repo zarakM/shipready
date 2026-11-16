@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
-	"github.com/muhammadzarakbinkaleem/shipready/internal/report"
+	"github.com/zarakM/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/report"
 )
 
 // fakeCluster returns a connectFunc serving the given fixtures.

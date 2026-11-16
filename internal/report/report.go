@@ -7,8 +7,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/checks"
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/checks"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 // SchemaVersion is bumped on any breaking change to the JSON output.

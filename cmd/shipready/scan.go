@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/checks"
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
-	"github.com/muhammadzarakbinkaleem/shipready/internal/report"
+	"github.com/zarakM/shipready/internal/checks"
+	"github.com/zarakM/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/report"
 )
 
 type scanOptions struct {

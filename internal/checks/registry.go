@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/muhammadzarakbinkaleem/shipready/internal/collect"
+	"github.com/zarakM/shipready/internal/collect"
 )
 
 // Registry is the ordered set of checks a scan runs.
