@@ -1,0 +1,79 @@
+# Read-only access for a ShipReady scan.
+#
+# This is everything the scanner needs and nothing more: "list" on the
+# resource types it reads. It grants no access to Secrets, no write access,
+# and no exec. A test in the ShipReady repository fails if this file and the
+# scanner's actual API calls ever differ.
+#
+# Apply it, then give the person or role running the scan the group
+# "shipready-readonly". On EKS:
+#
+#   kubectl apply -f clusterrole.yaml
+#   aws eks create-access-entry --cluster-name <cluster> \
+#     --principal-arn <iam-role-or-user-arn> \
+#     --kubernetes-groups shipready-readonly
+#
+# The last four rules cover optional add-ons. Granting them on a cluster that
+# does not have the add-on installed is harmless.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shipready-readonly
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - persistentvolumes
+      - pods
+      - serviceaccounts
+      - services
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "statefulsets"]
+    verbs: ["list"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["list"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["list"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["list"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterrolebindings", "clusterroles", "roles"]
+    verbs: ["list"]
+  # metrics-server: current CPU and memory use per pod.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["list"]
+  # cert-manager: certificate expiry dates. The certificates' Secrets are not read.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["list"]
+  # Velero: whether backups exist and succeed.
+  - apiGroups: ["velero.io"]
+    resources: ["backups", "schedules"]
+    verbs: ["list"]
+  # CSI snapshots: whether volumes have recent snapshots.
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shipready-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shipready-readonly
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: shipready-readonly

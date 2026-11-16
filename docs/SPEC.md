@@ -241,6 +241,15 @@ The collector never lists Secrets. Optional add-on APIs (metrics-server, cert-ma
 4. **AWS checks:** `--aws` flag, AWS collector, AWS-001 to AWS-007 with tests against mocked clients.
 5. **Release:** goreleaser config, README with install and usage, minimal read-only ClusterRole manifest and IAM policy the user can apply for the scanner.
 
+Decided in milestone 5:
+
+- **Builds:** static binaries (`CGO_ENABLED=0`) for Linux, macOS and Windows on amd64 and arm64. Archive names carry no version (`shipready_darwin_arm64.tar.gz`), so the "latest" download link never changes. Each archive also holds the license, the README and the `deploy/` files.
+- **Releasing:** pushing a tag such as `v0.1.0` runs the tests and GoReleaser in GitHub Actions and creates a **draft** release, which is published by hand. The booking link comes from the repository variable `CTAURL`; while it is empty, released binaries show the call-to-action text without a button.
+- **CI:** every pull request is built, vetted and tested on Linux, macOS and Windows, linted, and has all release archives built without publishing.
+- **Permission files:** `deploy/kubernetes/clusterrole.yaml` grants only `list`, on exactly the resource types the collector reads, and is bound to the group `shipready-readonly`. `deploy/aws/iam-policy.json` allows exactly the eleven AWS calls in section 6. Tests compare both files with what the collector does, so they cannot drift from the code.
+- **Install:** documented as a `curl` download with checksum verification, or `go install`. The macOS binary is not signed; the README explains the Gatekeeper workaround. A Homebrew tap is left for later.
+- **License:** Apache-2.0.
+
 ## 11. Out of scope for v1
 
 - Hosted backend, accounts, scheduled scans, history, Slack alerts (these are the paid tier, later)

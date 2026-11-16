@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ShipReadyReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVolumes",
+        "eks:DescribeCluster",
+        "eks:DescribeClusterVersions",
+        "eks:DescribeNodegroup",
+        "eks:ListNodegroups",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "rds:DescribeDBClusters",
+        "rds:DescribeDBInstances"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
