@@ -1,0 +1,157 @@
+# Workloads with reliability problems. Expected findings per check are listed
+# in the tests under internal/checks.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        # No resources and no probes at all.
+        - name: web
+          image: registry.example.com/web:3.1.0
+        # CPU request set, memory limit set with no memory request. The limit
+        # implies the request, so this container passes REL-001 and REL-002.
+        - name: proxy
+          image: registry.example.com/proxy:1.2.0
+          resources:
+            requests:
+              cpu: 50m
+            limits:
+              memory: 64Mi
+          readinessProbe:
+            tcpSocket:
+              port: 8443
+          livenessProbe:
+            tcpSocket:
+              port: 8443
+---
+# Does not match app=web, so the web Deployment still has no budget.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: other
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: other
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cache
+  namespace: shop
+spec:
+  replicas: 1
+  serviceName: cache
+  selector:
+    matchLabels:
+      app: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+    spec:
+      containers:
+        # Requests and readiness are fine. No memory limit, no liveness probe.
+        - name: redis
+          image: redis:7.4
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: logs
+  namespace: shop
+spec:
+  selector:
+    matchLabels:
+      app: logs
+  template:
+    metadata:
+      labels:
+        app: logs
+    spec:
+      containers:
+        - name: fluent
+          image: registry.example.com/fluent:4.0.0
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup
+  namespace: shop
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            # Memory request only: no CPU request, no memory limit.
+            - name: job
+              image: registry.example.com/cleanup:0.3.0
+              resources:
+                requests:
+                  memory: 64Mi
+---
+# Bare pod with nothing set.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oneoff
+  namespace: shop
+spec:
+  containers:
+    - name: main
+      image: registry.example.com/oneoff:0.1.0
+---
+# Owned by a ReplicaSet, so it is covered through its Deployment and must not
+# be reported as a bare pod.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f8c-abcde
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f8c
+      uid: 11111111-2222-3333-4444-555555555555
+spec:
+  containers:
+    - name: web
+      image: registry.example.com/web:3.1.0
+---
+# Finished bare pod: ignored.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: migration-done
+  namespace: shop
+spec:
+  containers:
+    - name: main
+      image: registry.example.com/migrate:0.1.0
+status:
+  phase: Succeeded
